@@ -144,6 +144,51 @@ python server.py
 fastmcp dev server.py --with-editable .
 ```
 
+## 🌐 Web UI for Authentication Setup
+
+This project also includes a simple web interface to help you easily obtain Kroger API tokens if you prefer not to use the command-line authentication flow or if you want to generate tokens for other applications.
+
+### 1. Install Dependencies
+
+Ensure you have Python installed. Then, install the required packages:
+
+```bash
+# Navigate to the cloned repository directory if you haven't already
+# cd kroger-mcp
+
+# Install with uv (recommended)
+uv pip install -r requirements.txt
+
+# Or install with pip
+pip install -r requirements.txt
+```
+*Note: `Flask` has been added to `requirements.txt` for this web UI.*
+
+### 2. Run the Web Application
+
+Once dependencies are installed, you can run the Flask web application:
+
+```bash
+python src/kroger_mcp/app.py
+```
+You should see output indicating the server is running, typically on `http://127.0.0.1:8000` or `http://localhost:8000`.
+
+### 3. Access in Browser
+
+Open your web browser and navigate to:
+
+[http://localhost:8000/](http://localhost:8000/)
+
+Follow the on-screen instructions:
+1. Enter your Kroger `Client ID` and `Client Secret`.
+2. Click "Generate Authorization URL".
+3. Click the generated link to go to the Kroger authorization page. Log in and authorize your application.
+4. After authorization, Kroger will redirect you to a URL (e.g., `http://localhost:8000/callback?code=YOUR_CODE`). Copy this entire URL from your browser's address bar.
+5. Paste the full redirect URL into the "Redirect URL" field on the web UI and click "Get Tokens".
+6. The status will update to show if authentication was successful. If successful, the application has stored the tokens for use by the MCP server (when run in the same environment).
+
+This web UI uses the same `auth_tools` as the main MCP server, ensuring consistency in how authentication is handled.
+
 
 ## 🛠️ Features
 

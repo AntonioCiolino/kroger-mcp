@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kroger MCP Auth</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="password"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        #authStatus {
+            font-weight: bold;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Kroger MCP Authentication</h2>
+
+        <div class="section" id="clientCredentialsSection">
+            <h3>Client Credentials</h3>
+            <label for="clientId">Client ID:</label>
+            <input type="text" id="clientId" name="clientId">
+
+            <label for="clientSecret">Client Secret:</label>
+            <input type="password" id="clientSecret" name="clientSecret">
+
+            <button onclick="generateAuthUrl()">Generate Authorization URL</button>
+        </div>
+
+        <div class="section" id="authUrlSection" style="display:none;">
+            <h3>Authorization URL</h3>
+            <p>Click the link below to authorize:</p>
+            <a id="authUrl" href="#" target="_blank"></a>
+        </div>
+
+        <div class="section" id="redirectUrlSection" style="display:none;">
+            <h3>Enter Redirect URL</h3>
+            <label for="redirectUrl">Redirect URL:</label>
+            <input type="text" id="redirectUrl" name="redirectUrl" placeholder="Paste the full redirect URL here">
+            <button onclick="getTokens()">Get Tokens</button>
+        </div>
+
+        <div class="section" id="statusSection">
+            <h3>Authentication Status</h3>
+            <p id="authStatus">Not Authenticated</p>
+        </div>
+    </div>
+
+    <script>
+        async function generateAuthUrl() {
+            const clientId = document.getElementById('clientId').value;
+            const clientSecret = document.getElementById('clientSecret').value;
+            const authStatus = document.getElementById('authStatus');
+            const authUrlEl = document.getElementById('authUrl');
+            const authUrlSection = document.getElementById('authUrlSection');
+            const redirectUrlSection = document.getElementById('redirectUrlSection');
+
+            authStatus.innerText = 'Processing...';
+            authStatus.className = '';
+            authUrlSection.style.display = 'none';
+            redirectUrlSection.style.display = 'none';
+
+            if (!clientId || !clientSecret) {
+                authStatus.innerText = 'Client ID and Client Secret are required.';
+                authStatus.className = 'error';
+                return;
+            }
+
+            try {
+                const response = await fetch('/auth_start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authUrlEl.href = data.authorization_url;
+                    authUrlEl.innerText = data.authorization_url;
+                    authUrlSection.style.display = 'block';
+                    redirectUrlSection.style.display = 'block';
+                    authStatus.innerText = 'Authorization URL generated. Please click the link and authorize.';
+                    authStatus.className = 'success';
+                } else {
+                    authStatus.innerText = `Error: ${data.error || 'Failed to generate authorization URL.'}`;
+                    authStatus.className = 'error';
+                }
+            } catch (error) {
+                console.error('Error generating auth URL:', error);
+                authStatus.innerText = 'An unexpected error occurred. Check the console.';
+                authStatus.className = 'error';
+            }
+        }
+
+        async function getTokens() {
+            const redirectUrl = document.getElementById('redirectUrl').value;
+            const authStatus = document.getElementById('authStatus');
+
+            authStatus.innerText = 'Processing...';
+            authStatus.className = '';
+
+            if (!redirectUrl) {
+                authStatus.innerText = 'Redirect URL is required.';
+                authStatus.className = 'error';
+                return;
+            }
+
+            try {
+                const response = await fetch('/auth_complete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ redirect_url: redirectUrl }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.status === 'success' || (data.access_token && data.refresh_token)) {
+                        authStatus.innerText = `Authentication Successful! Status: ${data.message || 'Tokens received.'}`;
+                        authStatus.className = 'success';
+                        // Optionally display token info if needed, carefully
+                        // console.log("Tokens:", data);
+                    } else {
+                         authStatus.innerText = `Authentication Failed: ${data.message || data.error || 'Unknown error from server.'}`;
+                         authStatus.className = 'error';
+                    }
+                } else {
+                    authStatus.innerText = `Error: ${data.error || 'Failed to complete authentication.'}`;
+                    authStatus.className = 'error';
+                }
+            } catch (error) {
+                console.error('Error getting tokens:', error);
+                authStatus.innerText = 'An unexpected error occurred. Check the console.';
+                authStatus.className = 'error';
+            }
+        }
+    </script>
+</body>
+</html>

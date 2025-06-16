@@ -8,3 +8,4 @@ kroger-api>=0.2.0
 requests
 pydantic
 python-dotenv
+Flask
