@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛒 Kroger Authentication Result</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛒</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .container { max-width: 600px; margin: 50px auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
+        .success-icon { font-size: 64px; margin-bottom: 20px; }
+        .error-icon { font-size: 64px; margin-bottom: 20px; color: #dc3545; }
+        h1 { margin-bottom: 20px; color: {{ 'green' if success else '#dc3545' }}; }
+        p { margin-bottom: 15px; }
+        .details { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: left; }
+        .details p { margin-bottom: 8px; }
+        .close-btn { background: #0066cc; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if success %}
+            <div class="success-icon">✅</div>
+            <h1>Authentication Successful</h1>
+            <p>{{ message }}</p>
+            
+            {% if token_info %}
+            <div class="details">
+                <p><strong>Token expires in:</strong> {{ token_info.expires_in }} seconds</p>
+                <p><strong>Scopes:</strong> {{ token_info.scope }}</p>
+                <p><strong>Refresh token:</strong> {{ "Available" if token_info.has_refresh_token else "Not available" }}</p>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="error-icon">❌</div>
+            <h1>Authentication Failed</h1>
+            <p>{{ message }}</p>
+        {% endif %}
+        
+        <button class="close-btn" onclick="window.close()">Close Window</button>
+    </div>
+    
+    <script>
+        // Notify the opener window that authentication is complete
+        if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({ 
+                type: 'auth_complete', 
+                success: {{ 'true' if success else 'false' }}
+            }, '*');
+        }
+        
+        // Auto-close after 5 seconds
+        setTimeout(() => {
+            window.close();
+        }, 5000);
+    </script>
+</body>
+</html>

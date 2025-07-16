@@ -23,6 +23,7 @@ from fastmcp import FastMCP
 from .tools import location_tools
 from .tools import product_tools
 from .tools import cart_tools
+from .tools import cart_api_tools
 from .tools import info_tools
 from .tools import profile_tools
 from .tools import utility_tools
@@ -72,6 +73,7 @@ def create_server() -> FastMCP:
     location_tools.register_tools(mcp)
     product_tools.register_tools(mcp)
     cart_tools.register_tools(mcp)
+    cart_api_tools.register_tools(mcp)
     info_tools.register_tools(mcp)
     profile_tools.register_tools(mcp)
     utility_tools.register_tools(mcp)

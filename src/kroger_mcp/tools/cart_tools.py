@@ -92,6 +92,26 @@ def _add_item_to_local_cart(product_id: str, quantity: int, modality: str, produ
     _save_cart_data(cart_data)
 
 
+async def _fetch_kroger_cart() -> Dict[str, Any]:
+    """Fetch the actual cart from Kroger API"""
+    try:
+        client = get_authenticated_client()
+        
+        # Make a direct request to the Kroger API to get the cart
+        # This is using the internal _make_request method of the client
+        # since the kroger_api library doesn't have a direct method for this
+        response = await client._make_request(
+            method="GET",
+            endpoint="/v1/carts",
+            headers={"Accept": "application/json"}
+        )
+        
+        return response
+    except Exception as e:
+        print(f"Error fetching Kroger cart: {e}")
+        return {"error": str(e)}
+
+
 def register_tools(mcp):
     """Register cart-related tools with the FastMCP server"""
     
@@ -455,6 +475,80 @@ def register_tools(mcp):
                 "error": f"Failed to mark order as placed: {str(e)}"
             }
 
+    @mcp.tool()
+    async def fetch_actual_kroger_cart(ctx: Context = None) -> Dict[str, Any]:
+        """
+        Fetch the actual cart from the Kroger API.
+        
+        This is an experimental feature that attempts to directly access the Kroger cart API.
+        It may not work if the Kroger API changes or if the user doesn't have the necessary permissions.
+        
+        Returns:
+            Dictionary containing the actual Kroger cart data or an error message
+        """
+        try:
+            if ctx:
+                await ctx.info("Attempting to fetch actual Kroger cart")
+            
+            # Fetch the cart from Kroger API
+            cart_response = await _fetch_kroger_cart()
+            
+            if "error" in cart_response:
+                if ctx:
+                    await ctx.error(f"Failed to fetch Kroger cart: {cart_response['error']}")
+                return {
+                    "success": False,
+                    "error": f"Failed to fetch Kroger cart: {cart_response['error']}"
+                }
+            
+            if ctx:
+                await ctx.info("Successfully fetched Kroger cart")
+                
+            # Update local cart tracking with the fetched data
+            try:
+                # Process the cart data and update local tracking
+                cart_data = _load_cart_data()
+                cart_data["current_cart"] = []  # Clear existing items
+                
+                # Extract items from the Kroger cart response and add to local tracking
+                if "data" in cart_response:
+                    kroger_cart = cart_response["data"]
+                    
+                    # Process the cart items based on the structure of the Kroger API response
+                    # This may need to be adjusted based on the actual response format
+                    if isinstance(kroger_cart, list) and len(kroger_cart) > 0:
+                        cart = kroger_cart[0]  # Assuming the first cart is the active one
+                        if "items" in cart:
+                            for item in cart["items"]:
+                                product_id = item.get("upc")
+                                quantity = item.get("quantity", 1)
+                                modality = item.get("modality", "PICKUP")
+                                
+                                # Add to local tracking
+                                _add_item_to_local_cart(product_id, quantity, modality)
+                
+                cart_data["last_updated"] = datetime.now().isoformat()
+                _save_cart_data(cart_data)
+                
+                if ctx:
+                    await ctx.info("Updated local cart tracking with fetched data")
+            except Exception as e:
+                if ctx:
+                    await ctx.warning(f"Failed to update local tracking: {str(e)}")
+            
+            return {
+                "success": True,
+                "message": "Successfully fetched Kroger cart",
+                "cart_data": cart_response
+            }
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Error fetching Kroger cart: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Error fetching Kroger cart: {str(e)}"
+            }
+    
     @mcp.tool()
     async def view_order_history(
         limit: int = 10,

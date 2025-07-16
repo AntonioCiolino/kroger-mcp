@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛒 Kroger Shopping</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛒</text></svg>">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/products.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cart.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Full-page Loading Spinner -->
+    <div id="pageLoader" class="page-loader">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading Kroger Shopping...</div>
+    </div>
+    
+    <div class="container">
+        <!-- Header -->
+        {% include 'partials/header.html' %}
+
+        <!-- Main Content -->
+        {% block content %}{% endblock %}
+        
+        <!-- Modals -->
+        {% include 'partials/modals.html' %}
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/locations.js') }}"></script>
+    
+    <!-- Additional Scripts -->
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            // Hide loading spinner
+            hidePageLoader();
+            
+            // Check if we have a preferred location
+            if (typeof checkPreferredLocation === 'function') {
+                checkPreferredLocation();
+            }
+            
+            // Update cart count
+            if (typeof updateCartView === 'function') {
+                updateCartView();
+            }
+        });
+    </script>
+</body>
+</html>

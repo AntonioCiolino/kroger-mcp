@@ -1,0 +1,31 @@
+<div class="header">
+    <div class="header-content">
+        <h1>🛒 Kroger Shopping</h1>
+        <div class="toolbar">
+            <button class="toolbar-btn active" onclick="showSection('products')">🔍 Products</button>
+            <button class="toolbar-btn" onclick="showLocationPopup()">📍 <span id="preferredLocationName">Locations</span></button>
+            <div class="fulfillment-selector">
+                <select id="globalFulfillmentMethod" class="fulfillment-dropdown">
+                    <option value="PICKUP">🚗 Pickup</option>
+                    <option value="DELIVERY">🚚 Delivery</option>
+                </select>
+            </div>
+            <button class="toolbar-btn" onclick="toggleAuth()">🔐 Auth</button>
+            <button class="toolbar-btn cart-btn" onclick="toggleCart()">🛒 <span id="cartItemCount">0</span></button>
+        </div>
+    </div>
+</div>
+
+<!-- Auth Section -->
+<div id="authSection" class="section" style="display: none;">
+    <div id="authStatus">
+        <span class="status-indicator status-disconnected"></span>
+        <span>Not authenticated</span>
+    </div>
+    <div style="margin-top: 15px;">
+        <button onclick="authenticateWithKroger()" id="authButton" class="btn-success">🔗 Authenticate with Kroger</button>
+        <button onclick="checkAuthStatus()" class="btn-secondary">Refresh Status</button>
+        <button onclick="logoutFromKroger()" id="logoutButton" class="btn-danger">🚪 Logout</button>
+    </div>
+    <div id="authResults" class="results" style="display: none;"></div>
+</div>

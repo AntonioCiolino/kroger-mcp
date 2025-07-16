@@ -1,0 +1,73 @@
+<!-- Location Popup -->
+<div id="locationPopup" class="popup-overlay" style="display: none;">
+    <div class="popup-content">
+        <div class="popup-header">
+            <h3>📍 Find Store Locations</h3>
+            <button onclick="closeLocationPopup()" class="popup-close">✕</button>
+        </div>
+        <div class="popup-body">
+            <div class="form-group">
+                <label for="zipCode">Enter Zip Code:</label>
+                <input type="text" id="zipCode" value="45244" placeholder="Enter zip code">
+                <button onclick="searchLocations()" class="btn-primary">Search Locations</button>
+            </div>
+            <div id="locationResults" class="results" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Cart Panel -->
+<div id="cartPanel" class="cart-panel" style="display: none;">
+    <div class="cart-panel-header">
+        <h3>🛒 Your Shopping Cart</h3>
+        <button data-action="close-cart" class="cart-close-btn">✕</button>
+    </div>
+    <div class="cart-panel-content">
+        <div id="cartResults"></div>
+    </div>
+</div>
+
+<!-- Product Details Modal -->
+<div id="productDetailsModal" class="popup-overlay" style="display: none;">
+    <div class="popup-content product-details-modal">
+        <div class="popup-header">
+            <h3>📦 Product Details</h3>
+            <button onclick="closeProductDetails()" class="popup-close">✕</button>
+        </div>
+        <div class="popup-body product-details-content">
+            <div id="productDetailsContent">
+                <div style="display: flex; flex-direction: column; align-items: center; padding: 40px 20px;">
+                    <div class="spinner" style="width: 40px; height: 40px; margin-bottom: 15px;"></div>
+                    <p style="color: #666;">Loading product details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Cart Entry Modal -->
+<div id="manualCartEntryModal" class="popup-overlay" style="display: none;">
+    <div class="popup-content">
+        <div class="popup-header">
+            <h3>📝 Manual Cart Entry</h3>
+            <button onclick="closeManualCartEntry()" class="popup-close">✕</button>
+        </div>
+        <div class="popup-body">
+            <p>Enter your cart items below. Each line should be in the format:</p>
+            <p><code>product_id,quantity</code></p>
+            <p>Example: <code>0001111042248,2</code></p>
+            
+            <div class="form-group">
+                <textarea id="manualCartItems" rows="10" style="width: 100%; padding: 10px; font-family: monospace;" 
+                    placeholder="0001111042248,2
+0001111091188,1
+0001111050624,1"></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button onclick="submitManualCartItems()" class="btn-primary">Import Items</button>
+                <button onclick="closeManualCartEntry()" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>

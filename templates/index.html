@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="main-content">
+    <div class="search-controls">
+        <input type="text" id="searchTerm" placeholder="Search for products..." class="search-input">
+        <select id="searchLimit" style="width: 120px; padding: 12px; border: 2px solid #ddd; border-radius: 6px;">
+            <option value="10">10 results</option>
+            <option value="20">20 results</option>
+            <option value="50">50 results</option>
+        </select>
+        <button onclick="searchProducts()" class="search-btn">Search</button>
+    </div>
+    <div id="productResults" class="results" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/products.js') }}"></script>
+{% endblock %}
