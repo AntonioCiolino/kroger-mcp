@@ -2,6 +2,13 @@
 
 {% block content %}
 <div class="main-content">
+    <!-- Price Alerts Section -->
+    <div id="priceAlerts" class="price-alerts" style="display: none;">
+        <h3>📉 Price Drop Alerts</h3>
+        <div id="priceAlertsContent">Loading price alerts...</div>
+        <button onclick="togglePriceAlerts()" class="btn-secondary" style="margin-top: 8px; font-size: 12px;">Hide Alerts</button>
+    </div>
+    
     <div class="search-controls">
         <input type="text" id="searchTerm" placeholder="Search for products..." class="search-input">
         <select id="searchLimit" style="width: 120px; padding: 12px; border: 2px solid #ddd; border-radius: 6px;">
@@ -10,6 +17,7 @@
             <option value="50">50 results</option>
         </select>
         <button onclick="searchProducts()" class="search-btn">Search</button>
+        <button onclick="togglePriceAlerts()" class="btn-secondary" style="margin-left: 8px;">📉 Price Alerts</button>
     </div>
     <div id="productResults" class="results" style="display: none;"></div>
 </div>

@@ -31,7 +31,6 @@
 
     <!-- Core Scripts -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
     <script src="{{ url_for('static', filename='js/locations.js') }}"></script>
     
@@ -43,6 +42,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Hide loading spinner
             hidePageLoader();
+            
+            // Check authentication status to update header
+            if (typeof checkAuthStatus === 'function') {
+                checkAuthStatus();
+            }
             
             // Check if we have a preferred location
             if (typeof checkPreferredLocation === 'function') {

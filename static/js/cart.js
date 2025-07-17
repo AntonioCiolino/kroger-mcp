@@ -9,6 +9,70 @@ const setGlobalModality = (modality) => {
     showToast(`✅ Default modality set to ${modality === 'PICKUP' ? 'Pickup' : 'Delivery'}`, 'success');
 };
 
+// Toggle cart panel visibility
+const toggleCart = () => {
+    console.log('toggleCart called!'); // Debug log
+    const cartPanel = document.getElementById('cartPanel');
+    console.log('cartPanel element:', cartPanel); // Debug log
+    
+    if (!cartPanel) {
+        console.error('Cart panel element not found!');
+        showToast('❌ Cart panel not found', 'error');
+        return;
+    }
+    
+    if (cartPanel.style.display === 'none' || !cartPanel.classList.contains('show')) {
+        console.log('Opening cart panel'); // Debug log
+        cartPanel.style.display = 'block';
+        setTimeout(() => cartPanel.classList.add('show'), 10);
+
+        const cartResults = document.getElementById('cartResults');
+        if (cartResults) {
+            cartResults.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; padding: 40px 20px;">
+                    <div class="spinner" style="width: 40px; height: 40px; margin-bottom: 15px;"></div>
+                    <p style="color: #666;">Loading your cart...</p>
+                </div>
+            `;
+        }
+
+        viewCart();
+    } else {
+        console.log('Closing cart panel'); // Debug log
+        cartPanel.classList.remove('show');
+        setTimeout(() => cartPanel.style.display = 'none', 300);
+    }
+};
+
+// Make toggleCart available globally for onclick handlers
+window.toggleCart = toggleCart;
+
+// Fetch cart from Kroger API and sync with local cart
+const fetchActualKrogerCart = async () => {
+    try {
+        showToast('🔄 Fetching your Kroger cart...', 'info');
+        
+        const response = await fetch('/api/cart/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fetch: true })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`✅ ${result.message}`, 'success');
+            await updateCartView();
+            await viewCart(); // Refresh the cart display
+        } else {
+            showToast(`❌ ${result.error || 'Failed to fetch Kroger cart'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error fetching Kroger cart:', error);
+        showToast('❌ Error fetching Kroger cart', 'error');
+    }
+};
+
 // Cart functions
 const updateCartView = async () => {
     try {
@@ -26,6 +90,10 @@ const updateCartView = async () => {
 };
 
 const quickAddToCart = async (productId) => {
+    // Find the add to cart button for this product to show loading state
+    const addButton = document.querySelector(`[onclick="quickAddToCart('${productId}')"]`);
+    const originalText = addButton ? addButton.textContent : '';
+    
     try {
         // Check authentication status first
         const authStatus = await checkAuthStatusForCart();
@@ -35,31 +103,75 @@ const quickAddToCart = async (productId) => {
             return;
         }
 
-        const response = await fetch('/api/cart/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                product_id: productId,
-                quantity: 1,
-                modality: getGlobalModality() // Use global modality preference
-            })
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            showToast('✅ Added to cart', 'success');
-            await updateCartView();
-
-            // If cart panel is open, refresh it
-            const cartPanel = document.getElementById('cartPanel');
-            if (cartPanel.classList.contains('show')) {
-                await viewCart();
-            }
-        } else {
-            showToast('❌ ' + (result.error || 'Failed to add to cart'), 'error');
+        // Show loading state with spinner
+        if (addButton) {
+            addButton.disabled = true;
+            addButton.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <div class="spinner" style="width: 12px; height: 12px; border-width: 2px;"></div>
+                    Adding...
+                </div>
+            `;
         }
+
+        await retryWithBackoff(async () => {
+            const response = await fetch('/api/cart/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    product_id: productId,
+                    quantity: 1,
+                    modality: getGlobalModality() // Use global modality preference
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Add to cart failed');
+            }
+            
+            return result;
+        });
+
+        // Show success state briefly
+        if (addButton) {
+            addButton.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    ✅ Added!
+                </div>
+            `;
+        }
+        
+        showToast('✅ Added to cart', 'success');
+        await updateCartView();
+
+        // If cart panel is open, refresh it
+        const cartPanel = document.getElementById('cartPanel');
+        if (cartPanel.classList.contains('show')) {
+            await viewCart();
+        }
+        
+        // Restore button after brief delay
+        setTimeout(() => {
+            if (addButton) {
+                addButton.disabled = false;
+                addButton.innerHTML = originalText;
+            }
+        }, 1500);
+        
     } catch (error) {
-        showToast('❌ Error adding to cart', 'error');
+        console.error('Error adding to cart:', error);
+        showToast(`❌ Failed to add to cart: ${error.message}`, 'error');
+        
+        // Restore button state immediately on error
+        if (addButton) {
+            addButton.disabled = false;
+            addButton.innerHTML = originalText;
+        }
     }
 };
 
@@ -103,29 +215,7 @@ const addToCart = async () => {
     }
 };
 
-// Make toggleCart available globally for onclick handlers
-window.toggleCart = () => {
-    const cartPanel = document.getElementById('cartPanel');
-    if (cartPanel.style.display === 'none' || !cartPanel.classList.contains('show')) {
-        cartPanel.style.display = 'block';
-        setTimeout(() => cartPanel.classList.add('show'), 10);
-
-        const cartResults = document.getElementById('cartResults');
-        cartResults.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; padding: 40px 20px;">
-                <div class="spinner" style="width: 40px; height: 40px; margin-bottom: 15px;"></div>
-                <p style="color: #666;">Loading your cart...</p>
-            </div>
-        `;
-
-        viewCart();
-    } else {
-        cartPanel.classList.remove('show');
-        setTimeout(() => cartPanel.style.display = 'none', 300);
-    }
-};
-
-const toggleCart = window.toggleCart;
+// Duplicate toggleCart function removed - using the one with debug logging above
 
 const viewCart = async () => {
     showLoading('cartResults');
@@ -222,18 +312,12 @@ const renderCart = (data) => {
                     <option value="DELIVERY" ${currentFilter === 'DELIVERY' ? 'selected' : ''}>🚚 Delivery Only (${allCartItems.filter(item => (item.modality || 'PICKUP') === 'DELIVERY').length})</option>
                 </select>
             </div>
-            <div class="cart-actions" style="flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-                <button data-action="fetch-cart" class="btn-primary">
-                    🔄 Fetch My Kroger Cart
-                </button>
-                <button data-action="add-samples" class="btn-secondary">
-                    ➕ Add Sample Items
-                </button>
-                <button data-action="manual-entry" class="btn-secondary">
-                    📝 Manual Entry
-                </button>
-                <button data-action="clear-cart" class="btn-danger">
-                    🗑️ Clear Cart
+            <div class="cart-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                <div class="sync-status" style="font-size: 12px; color: #666;">
+                    ✅ Always synced with your Kroger cart
+                </div>
+                <button data-action="clear-cart" class="btn-clear-cart">
+                    🗑️
                 </button>
             </div>
         </div>
@@ -336,8 +420,8 @@ const renderCart = (data) => {
 
         html += `
             <div class="cart-item">
-                <div class="cart-item-image">
-                    ${imageUrl ? `<img src="${imageUrl}" alt="${item.description || 'Product'}">` : '<div class="no-image">No Image</div>'}
+                <div class="cart-item-image clickable" onclick="showProductDetails('${item.product_id}')" title="Click to view product details">
+                    ${imageUrl ? `<img src="${imageUrl}" alt="${item.description || 'Product'}">` : '<div class="no-image">📦</div>'}
                 </div>
                 <div class="cart-item-details">
                     <div class="cart-item-header">
@@ -444,92 +528,192 @@ const toggleItemModality = async (productId, currentModality) => {
 };
 
 const removeFromCart = async (productId) => {
-    try {
-        const response = await fetch('/api/cart/remove', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                product_id: productId
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            showToast('✅ Item removed', 'success');
-            await viewCart();
-            await updateCartView();
-        } else {
-            showToast('❌ ' + (result.error || 'Failed to remove item'), 'error');
-        }
-    } catch (error) {
-        showToast('❌ Error removing item', 'error');
-    }
-};
-
-const clearCart = async () => {
-    if (!confirm('Are you sure you want to clear your cart?')) {
+    const cartItem = document.querySelector(`[data-product-id="${productId}"]`).closest('.cart-item');
+    
+    if (!cartItem) {
+        console.error('Cart item not found for removal');
         return;
     }
-
+    
+    // Show loading state on the specific item
+    showItemLoading(productId, true);
+    
     try {
-        const response = await fetch('/api/cart/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+        await retryWithBackoff(async () => {
+            const response = await fetch('/api/cart/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    product_id: productId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Remove failed');
+            }
+            
+            return result;
         });
 
-        const result = await response.json();
+        // Animate item removal
+        cartItem.style.transition = 'all 0.3s ease';
+        cartItem.style.transform = 'translateX(-100%)';
+        cartItem.style.opacity = '0';
+        cartItem.style.height = cartItem.offsetHeight + 'px';
+        
+        // After animation, collapse height and remove
+        setTimeout(() => {
+            cartItem.style.height = '0';
+            cartItem.style.padding = '0';
+            cartItem.style.margin = '0';
+            cartItem.style.overflow = 'hidden';
+            
+            // Remove from DOM after collapse animation
+            setTimeout(() => {
+                cartItem.remove();
+                
+                // Update cart count and check if cart is empty
+                updateCartCount();
+                checkEmptyCart();
+            }, 300);
+        }, 300);
 
-        if (result.success) {
-            showToast('✅ Cart cleared', 'success');
-            await viewCart();
-            await updateCartView();
-        } else {
-            showToast('❌ ' + (result.error || 'Failed to clear cart'), 'error');
-        }
+        showToast('✅ Item removed', 'success');
+        
+        // Only update the cart view counter, not the full cart
+        await updateCartView();
+        
     } catch (error) {
-        showToast('❌ Error clearing cart', 'error');
+        console.error('Error removing item:', error);
+        showToast(`❌ Failed to remove item: ${error.message}`, 'error');
+        showItemLoading(productId, false);
     }
 };
+
+// Show clear cart confirmation modal
+const clearCart = () => {
+    const modal = document.getElementById('clearCartModal');
+    modal.classList.add('show');
+};
+
+// Close clear cart modal
+const closeClearCartModal = () => {
+    const modal = document.getElementById('clearCartModal');
+    modal.classList.remove('show');
+};
+
+// Confirm and execute cart clearing
+const confirmClearCart = async () => {
+    closeClearCartModal();
+    
+    // Show loading state for the clear button
+    const clearButton = document.querySelector('[data-action="clear-cart"]');
+    if (clearButton) {
+        clearButton.disabled = true;
+        clearButton.innerHTML = '⏳';
+    }
+
+    try {
+        await retryWithBackoff(async () => {
+            const response = await fetch('/api/cart/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Clear failed');
+            }
+            
+            return result;
+        });
+
+        showToast('✅ Cart cleared', 'success');
+        await viewCart();
+        await updateCartView();
+        
+    } catch (error) {
+        console.error('Error clearing cart:', error);
+        showToast(`❌ Failed to clear cart: ${error.message}`, 'error');
+    } finally {
+        // Restore the clear button
+        if (clearButton) {
+            clearButton.disabled = false;
+            clearButton.innerHTML = '🗑️';
+        }
+    }
+};
+
+// Make functions globally available
+window.closeClearCartModal = closeClearCartModal;
+window.confirmClearCart = confirmClearCart;
 
 // Helper functions
 const checkAuthStatusForCart = async () => {
     try {
-        const response = await fetch('/api/auth/status');
-        const result = await response.json();
-        return result.data && (result.data.authenticated || result.data.token_valid);
+        // Use the cached auth status check from utils.js to reduce API calls
+        const result = await checkAuthStatus();
+        return result && result.data && (result.data.authenticated || result.data.token_valid);
     } catch (error) {
         console.error('Error checking auth status:', error);
         return false;
     }
 };
 
-// Function to fetch actual Kroger cart
-const fetchActualKrogerCart = async () => {
+// Update cart count in header
+const updateCartCount = async () => {
     try {
-        showToast('Fetching your Kroger cart...', 'info');
-
-        const response = await fetch('/api/cart/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ use_sample: false })
-        });
-
+        const response = await fetch('/api/cart/view');
         const result = await response.json();
-
         if (result.success) {
-            showToast('✅ ' + (result.message || 'Cart fetched successfully'), 'success');
-            await updateCartView();
-            await viewCart();
-        } else {
-            showToast('❌ ' + (result.error || 'Failed to fetch cart'), 'error');
-            console.error('Error details:', result);
+            const cartItems = result.data.cart_items;
+            const totalQuantity = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+            document.getElementById('cartItemCount').textContent = totalQuantity;
         }
     } catch (error) {
-        console.error('Error fetching cart:', error);
-        showToast('❌ Error fetching your Kroger cart', 'error');
+        console.error('Error updating cart count:', error);
     }
 };
+
+// Check if cart is empty and update display
+const checkEmptyCart = () => {
+    const cartItems = document.querySelectorAll('.cart-item');
+    const cartResults = document.getElementById('cartResults');
+    
+    if (cartItems.length === 0) {
+        // Show empty cart message
+        const cartHeader = cartResults.querySelector('.cart-header');
+        const emptyCartHtml = `
+            <div class="empty-cart">
+                <h3>Your cart is empty</h3>
+                <p>Search for products to add to your cart</p>
+            </div>
+        `;
+        
+        if (cartHeader) {
+            cartHeader.insertAdjacentHTML('afterend', emptyCartHtml);
+        } else {
+            cartResults.innerHTML = emptyCartHtml;
+        }
+        
+        // Remove price summary if it exists
+        const priceSummary = cartResults.querySelector('.price-summary');
+        if (priceSummary) {
+            priceSummary.remove();
+        }
+    }
+};
+
+// Duplicate fetchActualKrogerCart function removed - using the one above with fetch: true
 
 // Function to add sample items to cart (for demo purposes)
 const addSampleItems = async () => {
@@ -681,15 +865,6 @@ document.addEventListener('click', function(event) {
     event.stopPropagation();
     
     switch (action) {
-        case 'fetch-cart':
-            fetchActualKrogerCart();
-            break;
-        case 'add-samples':
-            addSampleItems();
-            break;
-        case 'manual-entry':
-            showManualCartEntry();
-            break;
         case 'clear-cart':
             clearCart();
             break;
@@ -700,7 +875,7 @@ document.addEventListener('click', function(event) {
         case 'increase-qty':
             const productId = target.getAttribute('data-product-id');
             const quantity = parseInt(target.getAttribute('data-quantity'));
-            updateCartItemQuantity(productId, quantity);
+            debouncedQuantityUpdate(productId, quantity);
             break;
         case 'remove-item':
             const removeProductId = target.getAttribute('data-product-id');
@@ -734,6 +909,106 @@ const updateQuantityDisplay = (productId, newQuantity) => {
             return;
         }
     });
+};
+
+// Debouncing for quantity updates
+let quantityUpdateTimeouts = {};
+
+// Retry logic with exponential backoff
+const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (attempt === maxRetries) {
+                throw error;
+            }
+            
+            const delay = baseDelay * Math.pow(2, attempt - 1);
+            console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+};
+
+// Show loading state for specific cart item
+const showItemLoading = (productId, isLoading) => {
+    const cartItems = document.querySelectorAll('.cart-item');
+    cartItems.forEach(item => {
+        const decreaseBtn = item.querySelector('[data-action="decrease-qty"]');
+        if (decreaseBtn && decreaseBtn.getAttribute('data-product-id') === productId) {
+            const buttons = item.querySelectorAll('[data-action*="qty"], [data-action="remove-item"]');
+            buttons.forEach(btn => {
+                btn.disabled = isLoading;
+                btn.style.opacity = isLoading ? '0.5' : '1';
+            });
+            
+            if (isLoading) {
+                const loadingIndicator = document.createElement('div');
+                loadingIndicator.className = 'item-loading';
+                loadingIndicator.innerHTML = '⏳';
+                loadingIndicator.style.cssText = 'position: absolute; top: 5px; right: 5px; font-size: 12px;';
+                item.style.position = 'relative';
+                item.appendChild(loadingIndicator);
+            } else {
+                const loadingIndicator = item.querySelector('.item-loading');
+                if (loadingIndicator) {
+                    loadingIndicator.remove();
+                }
+            }
+        }
+    });
+};
+
+const debouncedQuantityUpdate = (productId, newQuantity) => {
+    // Clear any existing timeout for this product
+    if (quantityUpdateTimeouts[productId]) {
+        clearTimeout(quantityUpdateTimeouts[productId]);
+    }
+    
+    // Update UI immediately for responsiveness
+    updateQuantityDisplay(productId, newQuantity);
+    
+    // Set a new timeout to send the API update after 500ms of no more clicks
+    quantityUpdateTimeouts[productId] = setTimeout(async () => {
+        showItemLoading(productId, true);
+        
+        try {
+            await retryWithBackoff(async () => {
+                const response = await fetch('/api/cart/update-quantity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        product_id: productId,
+                        quantity: newQuantity
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.error || 'Update failed');
+                }
+                
+                return result;
+            });
+            
+            showToast('✅ Quantity updated', 'success');
+            
+        } catch (error) {
+            console.error('Error updating quantity:', error);
+            showToast(`❌ Failed to update quantity: ${error.message}`, 'error');
+            // Refresh cart to show correct state
+            await viewCart();
+        } finally {
+            showItemLoading(productId, false);
+            // Clean up the timeout reference
+            delete quantityUpdateTimeouts[productId];
+        }
+    }, 500);
 };
 
 // Helper function to update cart totals without full refresh

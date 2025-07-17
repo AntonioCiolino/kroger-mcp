@@ -2,7 +2,7 @@
     <div class="header-content">
         <h1>🛒 Kroger Shopping</h1>
         <div class="toolbar">
-            <button class="toolbar-btn active" onclick="showSection('products')">🔍 Products</button>
+            <button class="toolbar-btn active" onclick="showSection('products')">🔍 Search</button>
             <button class="toolbar-btn" onclick="showLocationPopup()">📍 <span id="preferredLocationName">Locations</span></button>
             <div class="fulfillment-selector">
                 <select id="globalFulfillmentMethod" class="fulfillment-dropdown">
@@ -10,22 +10,35 @@
                     <option value="DELIVERY">🚚 Delivery</option>
                 </select>
             </div>
-            <button class="toolbar-btn" onclick="toggleAuth()">🔐 Auth</button>
+            <div class="login-indicator" onclick="toggleAuth()">
+                <div class="login-status" id="headerLoginStatus">
+                    <span class="login-icon">👤</span>
+                    <span class="login-text">Login</span>
+                </div>
+            </div>
             <button class="toolbar-btn cart-btn" onclick="toggleCart()">🛒 <span id="cartItemCount">0</span></button>
         </div>
     </div>
 </div>
 
-<!-- Auth Section -->
-<div id="authSection" class="section" style="display: none;">
-    <div id="authStatus">
-        <span class="status-indicator status-disconnected"></span>
-        <span>Not authenticated</span>
+<!-- Auth Modal -->
+<div id="authModal" class="auth-modal">
+    <div class="auth-modal-content">
+        <div class="auth-modal-header">
+            <h3>🔐 Kroger Authentication</h3>
+            <button onclick="closeAuthModal()" class="auth-modal-close">✕</button>
+        </div>
+        <div class="auth-modal-body">
+            <div id="authStatus">
+                <span class="status-indicator status-disconnected"></span>
+                <span>Not authenticated</span>
+            </div>
+            <div class="auth-actions">
+                <button onclick="authenticateWithKroger()" id="authButton" class="btn-success">🔗 Authenticate with Kroger</button>
+                <button onclick="checkAuthStatus(true)" class="btn-secondary">Refresh Status</button>
+                <button onclick="logoutFromKroger()" id="logoutButton" class="btn-danger">🚪 Logout</button>
+            </div>
+            <div id="authResults" class="results" style="display: none;"></div>
+        </div>
     </div>
-    <div style="margin-top: 15px;">
-        <button onclick="authenticateWithKroger()" id="authButton" class="btn-success">🔗 Authenticate with Kroger</button>
-        <button onclick="checkAuthStatus()" class="btn-secondary">Refresh Status</button>
-        <button onclick="logoutFromKroger()" id="logoutButton" class="btn-danger">🚪 Logout</button>
-    </div>
-    <div id="authResults" class="results" style="display: none;"></div>
 </div>

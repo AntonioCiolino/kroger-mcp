@@ -57,10 +57,17 @@ const displayProductResults = (data) => {
         const salePrice = pricing.sale_price;
         const onSale = salePrice && regularPrice && salePrice < regularPrice;
 
+        // Check for price tracking info
+        const priceTracking = product.price_tracking || {};
+        const priceDropBadge = priceTracking.price_dropped ?
+            `<div class="price-drop-badge">📉 Price Drop!</div>` : '';
+        const lowestPriceBadge = priceTracking.is_lowest_ever ?
+            `<div class="lowest-price-badge">🎯 Lowest Ever!</div>` : '';
+
         html += `
             <div class="product-card">
                 ${onSale ? '<div class="sale-badge">SALE</div>' : ''}
-                <div class="product-image">
+                <div class="product-image" onclick="showProductDetails('${product.productId}')" style="cursor: pointer;" title="Click to view product details">
                     ${imageUrl ? `<img src="${imageUrl}" alt="${product.description}">` : '📦'}
                 </div>
                 <div class="product-info">
@@ -71,7 +78,6 @@ const displayProductResults = (data) => {
                 regularPrice ? `$${regularPrice.toFixed(2)}` : 'Price not available'}
                     </div>
                     <button class="quick-add-btn" onclick="quickAddToCart('${product.productId}')">Add to Cart</button>
-                    <button class="quick-add-btn" style="margin-top: 5px; background: #6c757d;" onclick="showProductDetails('${product.productId}')">View Details</button>
                 </div>
             </div>
         `;
@@ -197,7 +203,31 @@ const displayProductDetails = (product) => {
         </div>
     `;
 
-    // Add aisle locations if available
+    // Add image gallery if multiple images (moved above store location)
+    if (product.images && product.images.length > 1) {
+        html += `
+            <div class="product-details-section">
+                <h3>Product Images</h3>
+                <div class="image-gallery">
+                    ${product.images.map((img, index) => `
+                        <div class="gallery-image ${index === 0 ? 'active' : ''}" 
+                             data-image-url="${img.url}" 
+                             data-product-name="${escapeHtml(product.description || 'Product')}"
+                             data-all-images="${escapeHtml(JSON.stringify(product.images))}"
+                             onclick="openImageModalSafe(this)">
+                            <img src="${img.url}" alt="${img.perspective || 'Product image'}">
+                            <div class="gallery-overlay">
+                                <span class="zoom-icon">🔍</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <p class="gallery-hint">👆 Click any thumbnail to view full-size images with zoom and navigation</p>
+            </div>
+        `;
+    }
+
+    // Add aisle locations if available (moved below images)
     if (product.aisle_locations && product.aisle_locations.length > 0) {
         html += `
             <div class="product-details-section">
@@ -209,22 +239,6 @@ const displayProductDetails = (product) => {
                         ${aisle.shelf_number ? `<br><strong>Shelf:</strong> ${aisle.shelf_number}` : ''}
                     </div>
                 `).join('')}
-            </div>
-        `;
-    }
-
-    // Add image gallery if multiple images
-    if (product.images && product.images.length > 1) {
-        html += `
-            <div class="product-details-section">
-                <h3>Product Images</h3>
-                <div class="image-gallery">
-                    ${product.images.map((img, index) => `
-                        <div class="gallery-image ${index === 0 ? 'active' : ''}" onclick="switchMainImage(this, '${img.url}')">
-                            <img src="${img.url}" alt="${img.perspective || 'Product image'}">
-                        </div>
-                    `).join('')}
-                </div>
             </div>
         `;
     }
@@ -256,21 +270,34 @@ const switchMainImage = (element, url) => {
 const addToCartFromDetails = async (productId) => {
     const quantity = parseInt(document.getElementById('detailsQuantity').value);
     const modality = document.getElementById('detailsModality').value;
+    const button = document.querySelector('.add-to-cart-btn');
+    
+    // Store original button content
+    const originalContent = button.innerHTML;
     
     try {
         // Show authentication warning if needed
-        const authStatus = await checkAuthStatusForCart();
-        if (!authStatus) {
+        const authResult = await checkAuthStatus();
+        if (!authResult || !authResult.data || !authResult.data.authenticated) {
             showToast('⚠️ Please authenticate first to add items to cart', 'error');
             toggleAuth(); // Show auth section
             return;
         }
 
+        // Show loading state
+        button.disabled = true;
+        button.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+                Adding...
+            </div>
+        `;
+
         const response = await fetch('/api/cart/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                product_id: productId, 
+            body: JSON.stringify({
+                product_id: productId,
                 quantity: quantity,
                 modality: modality
             })
@@ -278,23 +305,40 @@ const addToCartFromDetails = async (productId) => {
         const result = await response.json();
 
         if (result.success) {
+            // Show success state briefly
+            button.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    ✅ Added to Cart!
+                </div>
+            `;
+            
             const modalityText = modality === 'PICKUP' ? 'Pickup' : 'Delivery';
             showToast(`✅ Added ${quantity} item(s) to cart for ${modalityText}!`, 'success');
             await updateCartView();
-            closeProductDetails();
+            
+            // Close modal after brief delay
+            setTimeout(() => {
+                closeProductDetails();
+            }, 1000);
         } else {
             showToast('❌ Error: ' + result.error, 'error');
+            // Restore original button state
+            button.disabled = false;
+            button.innerHTML = originalContent;
         }
     } catch (error) {
         showToast('❌ Error: ' + error.message, 'error');
+        // Restore original button state
+        button.disabled = false;
+        button.innerHTML = originalContent;
     }
 };
 
 // Add event listener for Enter key on search input when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('searchTerm');
     if (searchInput) {
-        searchInput.addEventListener('keypress', function(event) {
+        searchInput.addEventListener('keypress', function (event) {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 searchProducts();
@@ -302,3 +346,219 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Price tracking functions
+const togglePriceAlerts = async () => {
+    const alertsSection = document.getElementById('priceAlerts');
+
+    if (alertsSection.style.display === 'none') {
+        // Show alerts and load data
+        alertsSection.style.display = 'block';
+        await loadPriceAlerts();
+    } else {
+        // Hide alerts
+        alertsSection.style.display = 'none';
+    }
+};
+
+const loadPriceAlerts = async () => {
+    const content = document.getElementById('priceAlertsContent');
+    content.innerHTML = 'Loading price alerts...';
+
+    try {
+        const response = await fetch('/api/price-tracking/alerts?threshold=5');
+        const result = await response.json();
+
+        if (result.success && result.data.alerts.length > 0) {
+            let html = '';
+            result.data.alerts.forEach(alert => {
+                html += `
+                    <div class="price-alert-item">
+                        <div class="price-alert-info">
+                            <div class="price-alert-product">${alert.product_name}</div>
+                            <div class="price-alert-change">
+                                Was $${alert.previous_price.toFixed(2)} → Now $${alert.current_price.toFixed(2)}
+                                (Save $${alert.drop_amount.toFixed(2)})
+                            </div>
+                        </div>
+                        <div class="price-alert-badge">
+                            ${alert.drop_percentage.toFixed(1)}% OFF
+                        </div>
+                    </div>
+                `;
+            });
+            content.innerHTML = html;
+        } else {
+            content.innerHTML = '<p>No significant price drops found. Keep searching for products to build your price history!</p>';
+        }
+    } catch (error) {
+        content.innerHTML = '<p>Error loading price alerts. Please try again.</p>';
+        console.error('Error loading price alerts:', error);
+    }
+};
+
+// Make functions globally available
+window.togglePriceAlerts = togglePriceAlerts;
+
+// Utility function to escape HTML and problematic characters
+const escapeHtml = (text) => {
+    if (!text) return '';
+    
+    // Create a temporary div to safely escape HTML
+    const div = document.createElement('div');
+    div.textContent = text;
+    let escaped = div.innerHTML;
+    
+    // Additional escaping for problematic characters that could break JavaScript
+    escaped = escaped
+        .replace(/'/g, '&#39;')     // Single quotes
+        .replace(/"/g, '&quot;')    // Double quotes  
+        .replace(/`/g, '&#96;')     // Backticks
+        .replace(/\\/g, '&#92;')    // Backslashes
+        .replace(/\r?\n/g, ' ')     // Line breaks
+        .replace(/\r/g, ' ')        // Carriage returns
+        .replace(/\t/g, ' ');       // Tabs
+    
+    return escaped;
+};
+
+// Safe image modal opener that uses data attributes
+const openImageModalSafe = (element) => {
+    const imageUrl = element.dataset.imageUrl;
+    const productName = element.dataset.productName;
+    const allImagesJson = element.dataset.allImages;
+    
+    let allImages;
+    try {
+        allImages = JSON.parse(allImagesJson);
+    } catch (e) {
+        console.error('Error parsing images data:', e);
+        allImages = [{ url: imageUrl, perspective: 'main' }];
+    }
+    
+    openImageModal(imageUrl, productName, allImages);
+};
+
+// Image modal functions
+const openImageModal = (imageUrl, productName, allImages) => {
+    // Create or get the image modal
+    let imageModal = document.getElementById('imageModal');
+    if (!imageModal) {
+        // Create the modal if it doesn't exist
+        imageModal = document.createElement('div');
+        imageModal.id = 'imageModal';
+        imageModal.className = 'image-modal';
+        document.body.appendChild(imageModal);
+    }
+
+    // Parse the images array if it's a string
+    let images = [];
+    try {
+        images = typeof allImages === 'string' ? JSON.parse(allImages.replace(/&quot;/g, '"')) : allImages;
+    } catch (e) {
+        images = [{ url: imageUrl, perspective: 'main' }];
+    }
+
+    // Find current image index
+    const currentIndex = images.findIndex(img => img.url === imageUrl);
+
+    imageModal.innerHTML = `
+        <div class="image-modal-overlay" onclick="closeImageModal()">
+            <div class="image-modal-content" onclick="event.stopPropagation()">
+                <div class="image-modal-header">
+                    <h3>${productName}</h3>
+                    <button class="image-modal-close" onclick="closeImageModal()">✕</button>
+                </div>
+                <div class="image-modal-body">
+                    <div class="image-modal-main">
+                        <img id="modalMainImage" src="${imageUrl}" alt="${productName}">
+                    </div>
+                    ${images.length > 1 ? `
+                        <div class="image-modal-nav">
+                            <button class="nav-btn prev" onclick="navigateImage(-1)" ${currentIndex <= 0 ? 'disabled' : ''}>‹</button>
+                            <span class="image-counter">${currentIndex + 1} of ${images.length}</span>
+                            <button class="nav-btn next" onclick="navigateImage(1)" ${currentIndex >= images.length - 1 ? 'disabled' : ''}>›</button>
+                        </div>
+                        <div class="image-modal-thumbnails">
+                            ${images.map((img, index) => `
+                                <div class="modal-thumbnail ${index === currentIndex ? 'active' : ''}" 
+                                     onclick="switchModalImage(${index})">
+                                    <img src="${img.url}" alt="${img.perspective || 'Product image'}">
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Store images data for navigation
+    imageModal.dataset.images = JSON.stringify(images);
+    imageModal.dataset.currentIndex = currentIndex.toString();
+
+    // Show the modal
+    imageModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+};
+
+const closeImageModal = () => {
+    const imageModal = document.getElementById('imageModal');
+    if (imageModal) {
+        imageModal.style.display = 'none';
+        document.body.style.overflow = ''; // Restore scrolling
+    }
+};
+
+const navigateImage = (direction) => {
+    const imageModal = document.getElementById('imageModal');
+    if (!imageModal) return;
+
+    const images = JSON.parse(imageModal.dataset.images);
+    let currentIndex = parseInt(imageModal.dataset.currentIndex);
+
+    currentIndex += direction;
+    if (currentIndex < 0) currentIndex = 0;
+    if (currentIndex >= images.length) currentIndex = images.length - 1;
+
+    switchModalImage(currentIndex);
+};
+
+const switchModalImage = (index) => {
+    const imageModal = document.getElementById('imageModal');
+    if (!imageModal) return;
+
+    const images = JSON.parse(imageModal.dataset.images);
+    const image = images[index];
+
+    // Update main image
+    const mainImage = document.getElementById('modalMainImage');
+    if (mainImage) {
+        mainImage.src = image.url;
+    }
+
+    // Update thumbnails
+    document.querySelectorAll('.modal-thumbnail').forEach((thumb, i) => {
+        thumb.classList.toggle('active', i === index);
+    });
+
+    // Update navigation
+    const prevBtn = document.querySelector('.nav-btn.prev');
+    const nextBtn = document.querySelector('.nav-btn.next');
+    const counter = document.querySelector('.image-counter');
+
+    if (prevBtn) prevBtn.disabled = index <= 0;
+    if (nextBtn) nextBtn.disabled = index >= images.length - 1;
+    if (counter) counter.textContent = `${index + 1} of ${images.length}`;
+
+    // Update stored index
+    imageModal.dataset.currentIndex = index.toString();
+};
+
+// Make functions globally available
+window.openImageModal = openImageModal;
+window.closeImageModal = closeImageModal;
+window.navigateImage = navigateImage;
+window.switchModalImage = switchModalImage;
+window.openImageModalSafe = openImageModalSafe;
+window.escapeHtml = escapeHtml;

@@ -170,4 +170,433 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         width: 100%; 
         height: 200px; 
     }
+}/
+* Clear Cart Button */
+.btn-clear-cart {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+}
+
+.btn-clear-cart:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+.btn-clear-cart:active {
+    transform: translateY(0);
+}
+
+.btn-clear-cart:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Clear Cart Confirmation Modal */
+.clear-cart-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+}
+
+.clear-cart-modal.show {
+    display: flex;
+}
+
+.clear-cart-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease;
+}
+
+.clear-cart-modal h3 {
+    margin-bottom: 16px;
+    color: #dc3545;
+    font-size: 18px;
+}
+
+.clear-cart-modal p {
+    margin-bottom: 24px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.clear-cart-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.clear-cart-modal-actions button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.clear-cart-modal-actions .btn-cancel {
+    background: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.clear-cart-modal-actions .btn-cancel:hover {
+    background: #e9ecef;
+}
+
+.clear-cart-modal-actions .btn-confirm {
+    background: #dc3545;
+    color: white;
+}
+
+.clear-cart-modal-actions .btn-confirm:hover {
+    background: #c82333;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { 
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}/* Price
+ Tracking Badges */
+.price-drop-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    animation: pulse 2s infinite;
+}
+
+.lowest-price-badge {
+    position: absolute;
+    top: 32px;
+    left: 8px;
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+    animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes glow {
+    from { box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3); }
+    to { box-shadow: 0 4px 12px rgba(220, 53, 69, 0.6); }
+}
+
+/* Price Alerts Section */
+.price-alerts {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.price-alerts h3 {
+    color: #495057;
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+
+.price-alert-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.price-alert-info {
+    flex: 1;
+}
+
+.price-alert-product {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.price-alert-change {
+    font-size: 14px;
+    color: #28a745;
+    font-weight: 500;
+}
+
+.price-alert-badge {
+    background: #28a745;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}/* Auth Mod
+al */
+.auth-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+}
+
+.auth-modal.show {
+    display: flex;
+}
+
+.auth-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease;
+}
+
+.auth-modal-header {
+    background: #0066cc;
+    color: white;
+    padding: 20px 24px;
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.auth-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.auth-modal-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.auth-modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.auth-modal-body {
+    padding: 24px;
+}
+
+.auth-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.auth-actions button {
+    flex: 1;
+    min-width: 140px;
+}
+
+#authStatus {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-connected {
+    background: #28a745;
+    box-shadow: 0 0 8px rgba(40, 167, 69, 0.4);
+}
+
+.status-disconnected {
+    background: #dc3545;
+    box-shadow: 0 0 8px rgba(220, 53, 69, 0.4);
+}
+
+.status-warning {
+    background: #ffc107;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.4);
+}
+
+/* Responsive auth modal */
+@media (max-width: 600px) {
+    .auth-modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .auth-actions {
+        flex-direction: column;
+    }
+    
+    .auth-actions button {
+        min-width: auto;
+    }
+}/* Login 
+/* Login Indicator */
+.login-indicator {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.login-indicator:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.login-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+    min-width: 80px;
+    justify-content: center;
+}
+
+.login-status:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.login-icon {
+    font-size: 16px;
+    opacity: 0.9;
+}
+
+.login-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    opacity: 0.95;
+}
+
+/* Login status states */
+.login-status.authenticated {
+    background: rgba(40, 167, 69, 0.2);
+    border-color: rgba(40, 167, 69, 0.4);
+}
+
+.login-status.authenticated .login-icon {
+    color: #28a745;
+}
+
+.login-status.authenticated .login-text {
+    color: #e8f5e8;
+}
+
+.login-status.error {
+    background: rgba(220, 53, 69, 0.2);
+    border-color: rgba(220, 53, 69, 0.4);
+}
+
+.login-status.error .login-icon {
+    color: #dc3545;
+}
+
+.login-status.error .login-text {
+    color: #f8e8e8;
+}
+
+/* Cart item image clickable styling */
+.cart-item-image.clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.cart-item-image.clickable:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cart-item-image.clickable img {
+    transition: all 0.2s ease;
+}
+
+.cart-item-image.clickable:hover img {
+    filter: brightness(1.1);
 }

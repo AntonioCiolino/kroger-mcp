@@ -64,6 +64,9 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .product-card:hover {
@@ -94,8 +97,39 @@
     transform: scale(1.05);
 }
 
+/* Enhanced clickable product image styling */
+.product-image[onclick] {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.product-image[onclick]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.product-image[onclick]:hover::after {
+    content: "👁️ View Details";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+}
+
 .product-info {
     padding: 15px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 .product-title {
@@ -131,7 +165,7 @@
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
-    margin-top: 5px;
+    margin-top: auto;
 }
 
 /* Tooltips */

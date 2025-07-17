@@ -58,8 +58,10 @@
 }
 
 .product-details-content {
-    max-height: 85vh;
+    max-height: 75vh;
     overflow-y: auto;
+    padding: 20px;
+    padding-bottom: 60px; /* Extra padding to ensure bottom content is visible */
 }
 
 .product-details-header {
@@ -200,33 +202,7 @@
     margin-bottom: 8px;
 }
 
-.image-gallery {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 15px;
-}
 
-.gallery-image {
-    width: 80px;
-    height: 80px;
-    border: 2px solid #ddd;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: border-color 0.2s;
-}
-
-.gallery-image:hover,
-.gallery-image.active {
-    border-color: #0066cc;
-}
-
-.gallery-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 4px;
-}
 
 /* Cart Panel */
 .cart-panel {
@@ -334,4 +310,281 @@ select {
     border-left: 4px solid #dc3545;
     color: #721c24;
     padding: 15px;
+}
+
+/* Enhanced Image Gallery */
+.image-gallery {
+    display: flex;
+    gap: 8px;
+    margin-top: 15px;
+    margin-bottom: 20px;
+    padding: 15px 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    overflow-x: auto;
+    min-height: 90px;
+}
+
+.gallery-image {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    flex-shrink: 0;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.gallery-image:hover {
+    border-color: #0066cc;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.gallery-image.active {
+    border-color: #0066cc;
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.2);
+}
+
+.gallery-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    transition: transform 0.3s ease;
+}
+
+.gallery-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 6px;
+}
+
+.gallery-image:hover .gallery-overlay {
+    opacity: 1;
+}
+
+.zoom-icon {
+    color: white;
+    font-size: 24px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-hint {
+    text-align: center;
+    color: #0066cc;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 10px;
+    background: #f0f8ff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #e6f3ff;
+}
+
+/* Image Modal */
+.image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.image-modal-overlay {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.image-modal-content {
+    background: white;
+    border-radius: 12px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease;
+}
+
+.image-modal-header {
+    background: #0066cc;
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.image-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.image-modal-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.image-modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.image-modal-body {
+    padding: 20px;
+    text-align: center;
+}
+
+.image-modal-main {
+    margin-bottom: 20px;
+}
+
+.image-modal-main img {
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.image-modal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.nav-btn {
+    background: #0066cc;
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover:not(:disabled) {
+    background: #0052a3;
+    transform: scale(1.1);
+}
+
+.nav-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.image-counter {
+    font-weight: 600;
+    color: #333;
+    font-size: 16px;
+}
+
+.image-modal-thumbnails {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 10px 0;
+}
+
+.modal-thumbnail {
+    width: 60px;
+    height: 60px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.modal-thumbnail:hover {
+    border-color: #0066cc;
+    transform: scale(1.05);
+}
+
+.modal-thumbnail.active {
+    border-color: #0066cc;
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.3);
+}
+
+.modal-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .image-gallery {
+        gap: 6px;
+        padding: 8px;
+    }
+    
+    .gallery-image {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .image-modal-content {
+        max-width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .image-modal-main img {
+        max-height: 50vh;
+    }
+    
+    .image-modal-thumbnails {
+        gap: 8px;
+    }
+    
+    .modal-thumbnail {
+        width: 50px;
+        height: 50px;
+    }
 }

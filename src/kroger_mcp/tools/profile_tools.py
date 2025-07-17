@@ -26,18 +26,42 @@ def register_tools(mcp):
             client = get_authenticated_client()
             profile = client.identity.get_profile()
             
+            if ctx:
+                await ctx.info(f"Full profile response: {profile}")
+            
             if profile and "data" in profile:
-                profile_id = profile["data"].get("id", "N/A")
+                profile_data = profile["data"]
+                profile_id = profile_data.get("id", "N/A")
+                
+                # Check for additional fields that might contain user info
+                first_name = profile_data.get("firstName") or profile_data.get("first_name")
+                last_name = profile_data.get("lastName") or profile_data.get("last_name") 
+                full_name = profile_data.get("name") or profile_data.get("fullName")
+                email = profile_data.get("email")
                 
                 if ctx:
                     await ctx.info(f"Retrieved profile for user ID: {profile_id}")
+                    if first_name or last_name or full_name:
+                        await ctx.info(f"User name info: first={first_name}, last={last_name}, full={full_name}")
                 
-                return {
+                result = {
                     "success": True,
                     "profile_id": profile_id,
                     "message": "User profile retrieved successfully",
-                    "note": "The Kroger Identity API only provides the profile ID for privacy reasons."
+                    "raw_data": profile_data  # Include all available data for debugging
                 }
+                
+                # Add name fields if available
+                if first_name:
+                    result["first_name"] = first_name
+                if last_name:
+                    result["last_name"] = last_name
+                if full_name:
+                    result["full_name"] = full_name
+                if email:
+                    result["email"] = email
+                
+                return result
             else:
                 return {
                     "success": False,

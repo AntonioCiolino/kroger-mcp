@@ -66,7 +66,7 @@ def register_auth_tools(mcp):
         kroger = KrogerAPI()
 
         # Scopes needed for Kroger API (cart.basic:write is needed for cart operations)
-        scopes = "product.compact cart.basic:write"
+        scopes = "product.compact cart.basic:write profile.name"
 
         # Get the authorization URL with PKCE
         auth_url = kroger.authorization.get_authorization_url(
