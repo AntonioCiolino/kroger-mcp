@@ -382,7 +382,7 @@ def register_tools(mcp):
             }
 
     @mcp.tool()
-    async def clear_current_cart(ctx: Context = None) -> Dict[str, Any]:
+    async def clear_local_cart_tracking(ctx: Context = None) -> Dict[str, Any]:
         """
         Clear all items from the local cart tracking only.
         
@@ -406,12 +406,182 @@ def register_tools(mcp):
             cart_data["last_updated"] = datetime.now().isoformat()
             _save_cart_data(cart_data)
             
+            if ctx:
+                await ctx.info(f"Cleared {items_count} items from local cart tracking")
+            
             return {
                 "success": True,
                 "message": f"Cleared {items_count} items from local cart tracking",
                 "items_cleared": items_count
             }
         except Exception as e:
+            if ctx:
+                await ctx.error(f"Failed to clear local cart tracking: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Failed to clear cart: {str(e)}"
+            }
+
+    @mcp.tool()
+    async def clear_cart(ctx: Context = None) -> Dict[str, Any]:
+        """
+        Clear all items from the actual Kroger cart and local tracking.
+        
+        This function uses the Partner API to remove all items from your actual Kroger cart,
+        then updates the local tracking to match. This is the recommended way to clear your cart
+        since it ensures both the Kroger cart and local tracking stay in sync.
+        
+        Requires authentication with cart.basic:rw scope.
+        
+        Returns:
+            Dictionary confirming the cart was cleared
+        """
+        try:
+            from .shared import get_authenticated_client
+            
+            if ctx:
+                await ctx.info("🧹 Starting cart clearing process...")
+                await ctx.info("📋 Step 1: Getting authenticated client...")
+            
+            client = get_authenticated_client()
+            
+            if ctx:
+                await ctx.info("✅ Step 2: Client authenticated successfully")
+                await ctx.info("📋 Step 3: Fetching current cart from Kroger API...")
+            
+            # Get the current cart to see what items need to be removed
+            try:
+                # Use direct HTTP request like the web UI does
+                import requests
+                
+                # Get the access token
+                token_info = client.client.token_info
+                access_token = token_info.get("access_token")
+                
+                if not access_token:
+                    raise Exception("No access token available")
+                
+                # Make direct API call
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json"
+                }
+                
+                response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
+                
+                if response.status_code != 200:
+                    raise Exception(f"API call failed with status {response.status_code}: {response.text}")
+                
+                carts_response = response.json()
+                
+                if ctx:
+                    await ctx.info(f"📋 Step 4: Cart API response received successfully")
+                
+            except Exception as cart_error:
+                if ctx:
+                    await ctx.error(f"❌ Failed to get carts: {str(cart_error)}")
+                # Still clear local tracking even if API fails
+                cart_data = _load_cart_data()
+                items_count = len(cart_data.get("current_cart", []))
+                cart_data["current_cart"] = []
+                cart_data["last_updated"] = datetime.now().isoformat()
+                _save_cart_data(cart_data)
+                
+                return {
+                    "success": True,
+                    "message": f"Cleared {items_count} items from local tracking (API error: {str(cart_error)})",
+                    "items_cleared": items_count,
+                    "warning": "Could not access Kroger cart API, only local tracking was cleared"
+                }
+            
+            if not carts_response or "data" not in carts_response or not carts_response["data"]:
+                # No cart exists, just clear local tracking
+                cart_data = _load_cart_data()
+                items_count = len(cart_data.get("current_cart", []))
+                cart_data["current_cart"] = []
+                cart_data["last_updated"] = datetime.now().isoformat()
+                _save_cart_data(cart_data)
+                
+                if ctx:
+                    await ctx.info("✅ Step 5: No Kroger cart found, cleared local tracking only")
+                
+                return {
+                    "success": True,
+                    "message": f"Cleared {items_count} items from local tracking (no Kroger cart found)",
+                    "items_cleared": items_count
+                }
+            
+            # Get the first (active) cart
+            kroger_cart = carts_response["data"][0]
+            cart_id = kroger_cart["id"]
+            
+            # Count items in Kroger cart before clearing
+            kroger_items_count = len(kroger_cart.get("items", []))
+            kroger_items_cleared = 0
+            
+            if ctx:
+                await ctx.info(f"📋 Step 5: Found Kroger cart with {kroger_items_count} item(s)")
+            
+            # Remove each item from the Kroger cart
+            if "items" in kroger_cart and kroger_cart["items"]:
+                if ctx:
+                    await ctx.info(f"🗑️ Step 6: Clearing {kroger_items_count} items from Kroger cart...")
+                
+                for item in kroger_cart["items"]:
+                    upc = item.get("upc")
+                    if upc:
+                        try:
+                            # Use direct HTTP DELETE request to remove item from Kroger cart
+                            delete_url = f"https://api.kroger.com/v1/carts/{cart_id}/items/{upc}"
+                            delete_response = requests.delete(delete_url, headers=headers)
+                            
+                            if delete_response.status_code in [200, 204]:
+                                kroger_items_cleared += 1
+                                if ctx:
+                                    await ctx.info(f"✅ Removed item {upc} from Kroger cart")
+                            else:
+                                if ctx:
+                                    await ctx.warning(f"⚠️ Failed to remove item {upc}: HTTP {delete_response.status_code}")
+                        except Exception as item_error:
+                            if ctx:
+                                await ctx.warning(f"⚠️ Error removing item {upc}: {str(item_error)}")
+            
+            # Clear local tracking to match
+            cart_data = _load_cart_data()
+            local_items_count = len(cart_data.get("current_cart", []))
+            cart_data["current_cart"] = []
+            cart_data["last_updated"] = datetime.now().isoformat()
+            _save_cart_data(cart_data)
+            
+            if ctx:
+                await ctx.info(f"🧹 Step 7: Cleared {local_items_count} items from local tracking")
+                await ctx.info(f"✅ Cart clearing complete!")
+                await ctx.info(f"📊 Summary: {kroger_items_cleared}/{kroger_items_count} items cleared from Kroger cart, {local_items_count} items cleared from local tracking")
+            
+            # Create detailed message
+            if kroger_items_cleared == kroger_items_count:
+                kroger_status = f"✅ Successfully cleared all {kroger_items_cleared} items from Kroger cart"
+            else:
+                kroger_status = f"⚠️ Cleared {kroger_items_cleared} of {kroger_items_count} items from Kroger cart"
+            
+            local_status = f"✅ Cleared {local_items_count} items from local tracking"
+            
+            return {
+                "success": True,
+                "message": f"{kroger_status}. {local_status}.",
+                "kroger_items_cleared": kroger_items_cleared,
+                "kroger_items_total": kroger_items_count,
+                "local_items_cleared": local_items_count,
+                "cart_id": cart_id,
+                "summary": {
+                    "kroger_cart": f"{kroger_items_cleared}/{kroger_items_count} items cleared",
+                    "local_tracking": f"{local_items_count} items cleared"
+                }
+            }
+            
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Failed to clear cart: {str(e)}")
             return {
                 "success": False,
                 "error": f"Failed to clear cart: {str(e)}"
@@ -549,6 +719,63 @@ def register_tools(mcp):
                 "error": f"Error fetching Kroger cart: {str(e)}"
             }
     
+    @mcp.tool()
+    async def test_cart_api_access(ctx: Context = None) -> Dict[str, Any]:
+        """
+        Test if we can access the Kroger cart API.
+        
+        This is a diagnostic tool to help troubleshoot cart clearing issues.
+        
+        Returns:
+            Dictionary with diagnostic information
+        """
+        try:
+            from .shared import get_authenticated_client
+            
+            if ctx:
+                await ctx.info("🔧 Testing cart API access...")
+            
+            client = get_authenticated_client()
+            
+            if ctx:
+                await ctx.info("✅ Client authenticated successfully")
+            
+            # Test cart access
+            try:
+                carts_response = client.cart.get_carts()
+                if ctx:
+                    await ctx.info(f"✅ Cart API accessible. Response type: {type(carts_response)}")
+                    if carts_response and "data" in carts_response:
+                        cart_count = len(carts_response["data"])
+                        await ctx.info(f"📊 Found {cart_count} cart(s)")
+                        if cart_count > 0:
+                            first_cart = carts_response["data"][0]
+                            item_count = len(first_cart.get("items", []))
+                            await ctx.info(f"📦 First cart has {item_count} item(s)")
+                
+                return {
+                    "success": True,
+                    "message": "Cart API access test successful",
+                    "cart_response": carts_response,
+                    "has_carts": bool(carts_response and "data" in carts_response and carts_response["data"])
+                }
+            except Exception as cart_error:
+                if ctx:
+                    await ctx.error(f"❌ Cart API access failed: {str(cart_error)}")
+                return {
+                    "success": False,
+                    "error": f"Cart API access failed: {str(cart_error)}",
+                    "suggestion": "Check authentication and cart.basic:rw scope"
+                }
+                
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"❌ Test failed: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Test failed: {str(e)}"
+            }
+
     @mcp.tool()
     async def view_order_history(
         limit: int = 10,

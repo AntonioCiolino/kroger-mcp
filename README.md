@@ -182,7 +182,8 @@ fastmcp dev server.py --with-editable .
 | `bulk_add_to_cart` | Add multiple items to cart in one operation | Yes |
 | `view_current_cart` | View items currently in your local cart tracking | No |
 | `remove_from_cart` | Remove items from local cart tracking | No |
-| `clear_current_cart` | Clear all items from local cart tracking | No |
+| `clear_cart` | Clear all items from actual Kroger cart and local tracking | Yes |
+| `clear_local_cart_tracking` | Clear all items from local cart tracking only | No |
 | `mark_order_placed` | Move current cart to order history | No |
 | `view_order_history` | View history of placed orders | No |
 
@@ -226,10 +227,11 @@ Since the Kroger API doesn't provide cart viewing functionality, this server mai
 - **Contents**: Historical orders with placement timestamps
 - **Usage**: Move completed carts to history with `mark_order_placed`
 
-### 🚧 Kroger Public API Limitations
-- **View Only**: The `remove_from_cart` and `clear_current_cart` tools ONLY affect local tracking, not the actual Kroger cart
-- **Local Sync**: Use these tools only when the user has already removed items from their cart in the Kroger app/website
-- **One-Way**: Items can be added to the Kroger cart but not removed through the Public API. The Partner API would allow these things, but that requires entering a contract with Kroger.
+### 🚧 Kroger API Limitations
+- **Limited Removal**: The `remove_from_cart` tool ONLY affects local tracking, not the actual Kroger cart
+- **Partner Access**: With Partner API access, `clear_cart` can clear the actual Kroger cart
+- **Local Sync**: Use `clear_local_cart_tracking` when you've manually cleared your cart in the Kroger app/website
+- **Recommended**: Use `clear_cart` (clears both Kroger cart and local tracking) instead of the local-only version
 
 | API | Version | Rate Limit | Notes |
 |-----|---------|------------|-------|

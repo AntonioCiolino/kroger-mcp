@@ -90,6 +90,7 @@ mcp = create_server()
 
 
 def main():
+    print("MCP server started", file=sys.stderr, flush=True)
     """Main entry point for the Kroger MCP server"""
     mcp.run()
 

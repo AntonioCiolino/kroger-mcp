@@ -1251,77 +1251,30 @@ def sync_cart():
 
 @app.route("/api/cart/clear", methods=["POST"])
 def clear_cart():
-    """Clear all items from the cart - using Kroger API as source of truth"""
+    """Clear all items from the cart - using MCP clear_cart tool with Partner API access"""
     try:
-        # Clear the Kroger cart first
-        try:
-            client = get_authenticated_client()
-            from kroger_mcp.tools.shared import get_preferred_location_id
-            
-            # Get the access token
-            token_info = client.client.token_info
-            access_token = token_info.get("access_token")
-            
-            if access_token:
-                import requests
-                
-                # Get current carts to find items to remove
-                headers = {
-                    "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json"
-                }
-                
-                carts_response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                
-                if carts_response.status_code == 200:
-                    carts_data = carts_response.json()
-                    if "data" in carts_data and carts_data["data"]:
-                        cart_id = carts_data["data"][0]["id"]  # Use first cart
-                        kroger_cart = carts_data["data"][0]
-                        
-                        # Remove each item from the Kroger cart
-                        if "items" in kroger_cart:
-                            for item in kroger_cart["items"]:
-                                product_id = item.get("upc")
-                                if product_id:
-                                    remove_url = f"https://api.kroger.com/v1/carts/{cart_id}/items/{product_id}"
-                                    requests.delete(remove_url, headers=headers)
-                                    # Don't worry about individual failures - we'll sync at the end
-                        
-                        # Update local cart to empty
-                        cart_file = "kroger_cart.json"
-                        cart_data = {
-                            "current_cart": [],
-                            "last_updated": datetime.now().isoformat(),
-                            "preferred_location_id": get_preferred_location_id(),
-                        }
-                        with open(cart_file, "w") as f:
-                            json.dump(cart_data, f, indent=2)
-                        
-                        return jsonify({"success": True, "message": "Cart cleared successfully"})
-                    else:
-                        # No cart exists, just clear local
-                        cart_file = "kroger_cart.json"
-                        cart_data = {
-                            "current_cart": [],
-                            "last_updated": datetime.now().isoformat(),
-                            "preferred_location_id": get_preferred_location_id(),
-                        }
-                        with open(cart_file, "w") as f:
-                            json.dump(cart_data, f, indent=2)
-                        
-                        return jsonify({"success": True, "message": "Cart cleared successfully"})
-                else:
-                    raise Exception(f"Failed to get carts: {carts_response.status_code}")
-            else:
-                raise Exception("No access token available")
-                
-        except Exception as api_error:
+        # Use the MCP clear_cart tool which handles both Kroger API and local tracking
+        import asyncio
+        
+        # Import the MCP clear_cart function
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+        from kroger_mcp.tools.cart_tools import clear_cart as mcp_clear_cart
+        
+        # Run the async MCP function
+        result = asyncio.run(mcp_clear_cart())
+        
+        if result.get("success"):
             return jsonify({
-                "success": False, 
-                "error": f"Failed to clear Kroger cart: {str(api_error)}"
+                "success": True, 
+                "message": result.get("message", "Cart cleared successfully"),
+                "items_cleared": result.get("items_cleared", 0)
             })
-
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.get("error", "Failed to clear cart")
+            })
+            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
