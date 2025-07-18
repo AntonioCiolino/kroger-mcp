@@ -12,6 +12,69 @@ def register_tools(mcp):
     """Register profile-related tools with the FastMCP server"""
     
     @mcp.tool()
+    async def get_user_loyalty_info(ctx: Context = None) -> Dict[str, Any]:
+        """
+        Get the authenticated user's Kroger loyalty information.
+        
+        Returns:
+            Dictionary containing loyalty card information
+        """
+        if ctx:
+            await ctx.info("Getting user loyalty information")
+        
+        try:
+            client = get_authenticated_client()
+            
+            # Try to get loyalty info directly
+            import requests
+            token_info = client.client.token_info
+            access_token = token_info.get('access_token')
+            
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            }
+            
+            response = requests.get('https://api.kroger.com/v1/identity/profile/loyalty', headers=headers)
+            
+            if response.status_code == 200:
+                loyalty_data = response.json()
+                if ctx:
+                    await ctx.info(f"Loyalty data retrieved: {loyalty_data}")
+                
+                if 'data' in loyalty_data and 'loyalty' in loyalty_data['data']:
+                    card_number = loyalty_data['data']['loyalty'].get('cardNumber')
+                    return {
+                        "success": True,
+                        "loyalty_card_number": card_number,
+                        "message": "Loyalty information retrieved successfully",
+                        "raw_data": loyalty_data
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": "No loyalty data found in response"
+                    }
+            else:
+                error_text = response.text
+                if ctx:
+                    await ctx.error(f"Loyalty API error: {response.status_code} - {error_text}")
+                
+                return {
+                    "success": False,
+                    "error": f"API error {response.status_code}: {error_text}",
+                    "message": "Failed to retrieve loyalty information. You may need to re-authenticate with loyalty scope."
+                }
+                
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Error getting loyalty info: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @mcp.tool()
     async def get_user_profile(ctx: Context = None) -> Dict[str, Any]:
         """
         Get the authenticated user's Kroger profile information.

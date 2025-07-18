@@ -28,6 +28,7 @@ from .tools import info_tools
 from .tools import profile_tools
 from .tools import utility_tools
 from .tools import auth_tools
+from .tools import purchase_history_tools
 
 # Import prompts
 from . import prompts
@@ -47,6 +48,7 @@ def create_server() -> FastMCP:
         - Add items to shopping cart with local tracking
         - Access chain and department information
         - User profile management
+        - Purchase history and receipt details (requires loyalty scope)
         
         Common workflows:
         1. Set a preferred location with set_preferred_location
@@ -66,7 +68,7 @@ def create_server() -> FastMCP:
         This server maintains a local record of items added to your cart since the Kroger API
         doesn't provide cart viewing functionality. When you place an order through the Kroger
         website/app, use mark_order_placed to move the current cart to order history.
-        """
+        """,
     )
 
     # Register all tools from the modules
@@ -78,10 +80,11 @@ def create_server() -> FastMCP:
     profile_tools.register_tools(mcp)
     utility_tools.register_tools(mcp)
     auth_tools.register_tools(mcp)
-    
+    purchase_history_tools.register_tools(mcp)
+
     # Register prompts
     prompts.register_prompts(mcp)
-    
+
     return mcp
 
 

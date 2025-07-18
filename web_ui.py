@@ -1458,6 +1458,15 @@ def start_auth():
         from kroger_api.utils import generate_pkce_parameters
         from kroger_api import KrogerAPI
 
+        # Clear any existing authentication tokens to ensure fresh authentication
+        token_file = ".kroger_token_user.json"
+        if os.path.exists(token_file):
+            try:
+                os.remove(token_file)
+                print("Cleared existing authentication token for fresh authentication")
+            except Exception as e:
+                print(f"Warning: Could not remove old token file: {e}")
+
         # Generate PKCE parameters and store them globally
         global _pkce_params, _auth_state
         _pkce_params = generate_pkce_parameters()
@@ -1499,7 +1508,8 @@ def start_auth():
         
         # Option 5: Include profile scope to get user information
         # Using profile.name to get firstName and lastName
-        scopes = "product.compact cart.basic:rw profile.name"
+        # Adding profile.loyalty to get loyalty card information for purchase history
+        scopes = "product.compact cart.basic:rw profile.name profile.loyalty"
         
         print(f"Requesting scopes: {scopes}")
         print(f"Client ID: {client_id}")

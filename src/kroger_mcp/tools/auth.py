@@ -41,6 +41,22 @@ def register_auth_tools(mcp):
         """
         global _pkce_params, _auth_state
 
+        # Clear any existing authentication tokens to ensure fresh authentication
+        from .shared import invalidate_authenticated_client
+        invalidate_authenticated_client()
+        
+        # Also remove the token file to force fresh authentication
+        import os
+        token_file = ".kroger_token_user.json"
+        if os.path.exists(token_file):
+            try:
+                os.remove(token_file)
+                if ctx:
+                    await ctx.info("Cleared existing authentication token")
+            except Exception as e:
+                if ctx:
+                    await ctx.warning(f"Could not remove old token file: {e}")
+
         # Generate PKCE parameters
         _pkce_params = generate_pkce_parameters()
 
@@ -66,7 +82,8 @@ def register_auth_tools(mcp):
         kroger = KrogerAPI()
 
         # Scopes needed for Kroger API (cart.basic:write is needed for cart operations)
-        scopes = "product.compact cart.basic:write profile.name"
+        # profile.loyalty is needed for loyalty card information
+        scopes = "product.compact cart.basic:write profile.name profile.loyalty"
 
         # Get the authorization URL with PKCE
         auth_url = kroger.authorization.get_authorization_url(

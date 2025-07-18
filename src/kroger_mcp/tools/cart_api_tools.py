@@ -8,6 +8,59 @@ from typing import Dict, Any, List, Optional
 
 from fastmcp import Context
 from .shared import get_authenticated_client
+import requests
+
+
+async def _make_kroger_api_request(
+    method: str, endpoint: str, headers: Dict[str, str] = None, data: str = None
+) -> Dict[str, Any]:
+    """Make a direct HTTP request to the Kroger API using the authenticated client's token"""
+    try:
+        client = get_authenticated_client()
+
+        # Get the access token from the client
+        token_info = client.client.token_info
+        access_token = token_info.get("access_token")
+
+        if not access_token:
+            raise Exception("No access token available")
+
+        # Prepare headers
+        request_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+        if headers:
+            request_headers.update(headers)
+
+        # Make the request
+        url = f"https://api.kroger.com{endpoint}"
+
+        if method.upper() == "GET":
+            response = requests.get(url, headers=request_headers)
+        elif method.upper() == "POST":
+            response = requests.post(url, headers=request_headers, data=data)
+        elif method.upper() == "PUT":
+            response = requests.put(url, headers=request_headers, data=data)
+        elif method.upper() == "DELETE":
+            response = requests.delete(url, headers=request_headers)
+        else:
+            raise Exception(f"Unsupported HTTP method: {method}")
+
+        # Check for errors
+        if response.status_code not in [200, 201, 204]:
+            raise Exception(
+                f"API request failed with status {response.status_code}: {response.text}"
+            )
+
+        # Return JSON response if there's content
+        if response.content:
+            return response.json()
+        else:
+            return {"success": True}
+
+    except Exception as e:
+        raise Exception(f"Kroger API request failed: {str(e)}")
 
 
 def register_tools(mcp):
@@ -30,10 +83,9 @@ def register_tools(mcp):
             client = get_authenticated_client()
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="GET",
                 endpoint="/v1/carts",
-                headers={"Accept": "application/json"},
             )
 
             if ctx:
@@ -107,12 +159,11 @@ def register_tools(mcp):
                 request_body["items"] = formatted_items
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="POST",
                 endpoint="/v1/carts",
                 headers={
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
                 },
                 data=json.dumps(request_body) if request_body else None,
             )
@@ -169,10 +220,9 @@ def register_tools(mcp):
             client = get_authenticated_client()
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="GET",
                 endpoint=f"/v1/carts/{cart_id}",
-                headers={"Accept": "application/json"},
             )
 
             if ctx:
@@ -253,12 +303,11 @@ def register_tools(mcp):
             request_body = {"items": formatted_items}
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="PUT",
                 endpoint=f"/v1/carts/{cart_id}",
                 headers={
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
                 },
                 data=json.dumps(request_body),
             )
@@ -347,12 +396,11 @@ def register_tools(mcp):
                 request_body["specialInstructions"] = special_instructions
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="POST",
                 endpoint=f"/v1/carts/{cart_id}/items",
                 headers={
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
                 },
                 data=json.dumps(request_body),
             )
@@ -437,12 +485,11 @@ def register_tools(mcp):
             request_body = {"quantity": quantity}
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="PUT",
                 endpoint=f"/v1/carts/{cart_id}/items/{upc}",
                 headers={
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
                 },
                 data=json.dumps(request_body),
             )
@@ -520,10 +567,9 @@ def register_tools(mcp):
             client = get_authenticated_client()
 
             # Make direct API request
-            response = await client._make_request(
+            response = await _make_kroger_api_request(
                 method="DELETE",
                 endpoint=f"/v1/carts/{cart_id}/items/{upc}",
-                headers={"Accept": "application/json"},
             )
 
             if ctx:

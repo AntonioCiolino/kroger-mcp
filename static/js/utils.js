@@ -208,6 +208,14 @@ const checkAuthStatus = async (forceRefresh = false) => {
         
         if (result.success && result.data.authenticated) {
             showToast('✅ Authentication verified', 'success');
+            
+            // Auto-dismiss the auth modal if it's open and authentication is successful
+            const authModal = document.getElementById('authModal');
+            if (authModal && authModal.classList.contains('show')) {
+                setTimeout(() => {
+                    closeAuthModal();
+                }, 1500); // Wait 1.5 seconds to let user see the success message
+            }
         }
         
         return result;
