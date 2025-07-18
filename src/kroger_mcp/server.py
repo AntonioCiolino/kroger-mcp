@@ -85,9 +85,12 @@ def create_server() -> FastMCP:
     return mcp
 
 
+# Create the server instance at module level for FastMCP dev server
+mcp = create_server()
+
+
 def main():
     """Main entry point for the Kroger MCP server"""
-    mcp = create_server()
     mcp.run()
 
 
