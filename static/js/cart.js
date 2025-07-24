@@ -409,7 +409,7 @@ const renderCart = (data) => {
 
     cartItems.forEach(item => {
         const imageUrl = item.images && item.images.length > 0
-            ? item.images[0].url
+            ? item.images.find(img => img.perspective === 'front')?.url || item.images[0].url
             : null;
 
         const pricing = item.pricing || {};
