@@ -8,7 +8,16 @@ const searchProducts = async () => {
         return;
     }
 
-    showLoading('productResults');
+    // Show spinner with search-specific message
+    const resultsEl = document.getElementById('productResults');
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; padding: 40px 20px;">
+            <div class="spinner" style="width: 40px; height: 40px; margin-bottom: 15px;"></div>
+            <p style="color: #666;">Searching for "${term}"...</p>
+            <p style="color: #999; font-size: 14px;">Looking for up to ${limit} results</p>
+        </div>
+    `;
 
     try {
         const response = await fetch('/api/products/search', {
@@ -28,6 +37,19 @@ const searchProducts = async () => {
         showResults('productResults', 'Error: ' + error.message, true);
     }
 };
+
+// Handle limit dropdown change - automatically search if there's a previous search term
+const onLimitChange = () => {
+    const term = document.getElementById('searchTerm').value;
+    
+    // Only auto-search if there's already a search term
+    if (term.trim()) {
+        searchProducts();
+    }
+};
+
+// Make the function globally available
+window.onLimitChange = onLimitChange;
 
 const displayProductResults = (data) => {
     const resultsEl = document.getElementById('productResults');
@@ -381,8 +403,13 @@ const loadPriceAlerts = async () => {
                                 (Save $${alert.drop_amount.toFixed(2)})
                             </div>
                         </div>
-                        <div class="price-alert-badge">
-                            ${alert.drop_percentage.toFixed(1)}% OFF
+                        <div class="price-alert-actions">
+                            <div class="price-alert-badge">
+                                ${alert.drop_percentage.toFixed(1)}% OFF
+                            </div>
+                            <button class="price-alert-add-btn" onclick="quickAddToCart('${alert.product_id}')" title="Add to cart">
+                                🛒 Add to Cart
+                            </button>
                         </div>
                     </div>
                 `;

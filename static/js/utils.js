@@ -2,7 +2,12 @@
 const showLoading = (id) => {
     const el = document.getElementById(id);
     el.style.display = 'block';
-    el.innerHTML = '<p>Loading...</p>';
+    el.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; padding: 40px 20px;">
+            <div class="spinner" style="width: 40px; height: 40px; margin-bottom: 15px;"></div>
+            <p style="color: #666;">Searching products...</p>
+        </div>
+    `;
 };
 
 const showResults = (id, data, isError = false) => {

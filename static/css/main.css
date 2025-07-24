@@ -378,6 +378,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     font-weight: 500;
 }
 
+.price-alert-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
 .price-alert-badge {
     background: #28a745;
     color: white;
@@ -385,6 +392,28 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     border-radius: 12px;
     font-size: 12px;
     font-weight: 600;
+}
+
+.price-alert-add-btn {
+    background: #0066cc;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.price-alert-add-btn:hover {
+    background: #0052a3;
+}
+
+.price-alert-add-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
 }/* Auth Mod
 al */
 .auth-modal {
