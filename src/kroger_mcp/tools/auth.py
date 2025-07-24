@@ -84,7 +84,8 @@ def register_auth_tools(mcp):
         # Scopes needed for Kroger API (cart.basic:write is needed for cart operations)
         # profile.loyalty is needed for loyalty card information
         scopes = "product.compact cart.basic:write profile.name profile.loyalty"
-
+        #scopes = "cart.basic cart.basic:write product.basic product.compact product.personalized profile.basic profile.compact profile.full profile.loyalty profile.loyaltyId profile.name urn:com:kroger:kr:purchase:history:read"
+        
         # Get the authorization URL with PKCE
         auth_url = kroger.authorization.get_authorization_url(
             scope=scopes,

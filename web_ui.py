@@ -1509,6 +1509,7 @@ def start_auth():
         # Option 5: Include profile scope to get user information
         # Using profile.name to get firstName and lastName
         # Adding profile.loyalty to get loyalty card information for purchase history
+        #scopes = "cart.basic:write product.compact product.personalized profile.compact profile.full profile.loyalty profile.loyaltyId profile.name urn:com:kroger:kr:purchase:history:read"
         scopes = "product.compact cart.basic:rw profile.name profile.loyalty"
         
         print(f"Requesting scopes: {scopes}")

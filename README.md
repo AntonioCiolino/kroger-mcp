@@ -144,6 +144,33 @@ python server.py
 fastmcp dev server.py --with-editable .
 ```
 
+## 🚀 Development & Local Testing
+
+For local development and testing, this project includes convenient startup scripts:
+
+### MCP Server
+Start the MCP server for use with Claude Desktop or other MCP clients:
+```bash
+./start_mcp_server.sh
+```
+
+This script will:
+- Activate the virtual environment
+- Install dependencies if needed
+- Start the MCP server on stdio
+
+### Web Interface
+Start the Flask web application for browser-based testing:
+```bash
+./start_web_app.sh
+```
+
+This script will:
+- Activate the virtual environment
+- Install dependencies if needed
+- Start the web app at http://localhost:5000
+
+The web interface provides a user-friendly way to test all Kroger MCP functionality including store search, product search, cart management, and authentication.
 
 ## 🛠️ Features
 
