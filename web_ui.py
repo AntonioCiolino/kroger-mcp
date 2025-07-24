@@ -173,33 +173,40 @@ def set_display_name():
     """Set user's preferred display name"""
     try:
         data = request.get_json()
-        display_name = data.get('display_name', '').strip()
-        
+        display_name = data.get("display_name", "").strip()
+
         if not display_name:
             return jsonify({"success": False, "error": "Display name cannot be empty"})
-        
+
         if len(display_name) > 50:
-            return jsonify({"success": False, "error": "Display name must be 50 characters or less"})
-        
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Display name must be 50 characters or less",
+                }
+            )
+
         # Load existing preferences
         try:
-            with open('kroger_preferences.json', 'r') as f:
+            with open("kroger_preferences.json", "r") as f:
                 prefs = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             prefs = {}
-        
+
         # Update display name
-        prefs['display_name'] = display_name
-        
+        prefs["display_name"] = display_name
+
         # Save preferences
-        with open('kroger_preferences.json', 'w') as f:
+        with open("kroger_preferences.json", "w") as f:
             json.dump(prefs, f, indent=2)
-        
-        return jsonify({
-            "success": True, 
-            "message": f"Display name set to '{display_name}'",
-            "display_name": display_name
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Display name set to '{display_name}'",
+                "display_name": display_name,
+            }
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -209,17 +216,19 @@ def get_display_name():
     """Get user's current display name"""
     try:
         try:
-            with open('kroger_preferences.json', 'r') as f:
+            with open("kroger_preferences.json", "r") as f:
                 prefs = json.load(f)
-                display_name = prefs.get('display_name')
+                display_name = prefs.get("display_name")
         except (FileNotFoundError, json.JSONDecodeError):
             display_name = None
-        
-        return jsonify({
-            "success": True,
-            "display_name": display_name,
-            "has_custom_name": display_name is not None
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "display_name": display_name,
+                "has_custom_name": display_name is not None,
+            }
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -229,11 +238,15 @@ def debug_profile():
     """Debug endpoint to see what profile data is available"""
     try:
         client = get_authenticated_client()
-        
+
         # Get token info
-        token_info = client.client.token_info if hasattr(client, 'client') and hasattr(client.client, 'token_info') else None
+        token_info = (
+            client.client.token_info
+            if hasattr(client, "client") and hasattr(client.client, "token_info")
+            else None
+        )
         scopes = []
-        
+
         # Try to get scopes from JWT token first (more reliable)
         if token_info:
             try:
@@ -241,48 +254,51 @@ def debug_profile():
                 if access_token:
                     # Decode JWT payload
                     import base64
-                    parts = access_token.split('.')
+
+                    parts = access_token.split(".")
                     if len(parts) >= 2:
                         payload = parts[1]
-                        payload += '=' * (4 - len(payload) % 4)  # Add padding
+                        payload += "=" * (4 - len(payload) % 4)  # Add padding
                         decoded = base64.b64decode(payload)
                         jwt_data = json.loads(decoded)
                         scopes = jwt_data.get("scope", "").split(" ")
                     else:
-                        scopes = token_info.get('scope', '').split(' ')
+                        scopes = token_info.get("scope", "").split(" ")
                 else:
-                    scopes = token_info.get('scope', '').split(' ')
+                    scopes = token_info.get("scope", "").split(" ")
             except Exception as e:
                 print(f"Error decoding JWT for debug: {e}")
-                scopes = token_info.get('scope', '').split(' ') if token_info else []
-        
+                scopes = token_info.get("scope", "").split(" ") if token_info else []
+
         result = {
             "success": True,
             "has_token": token_info is not None,
             "scopes": scopes,
             "has_profile_scope": "profile.name" in scopes,
             "profile_data": None,
-            "error": None
+            "error": None,
         }
-        
+
         if "profile.name" in scopes:
             try:
                 profile = client.identity.get_profile()
                 result["profile_data"] = profile
-                result["profile_keys"] = list(profile.get("data", {}).keys()) if profile and "data" in profile else []
+                result["profile_keys"] = (
+                    list(profile.get("data", {}).keys())
+                    if profile and "data" in profile
+                    else []
+                )
             except Exception as profile_error:
                 result["error"] = str(profile_error)
                 result["profile_data"] = None
         else:
-            result["error"] = "profile.name scope not available - need to re-authenticate"
-        
+            result["error"] = (
+                "profile.name scope not available - need to re-authenticate"
+            )
+
         return jsonify(result)
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "authenticated": False
-        })
+        return jsonify({"success": False, "error": str(e), "authenticated": False})
 
 
 @app.route("/api/products/details", methods=["GET"])
@@ -439,14 +455,15 @@ def search_products():
                         price = item["price"]
                         regular_price = price.get("regular")
                         sale_price = price.get("promo")
-                        
+
                         formatted_product["pricing"] = {
                             "regular_price": regular_price,
                             "sale_price": sale_price,
                             "regular_per_unit": price.get("regularPerUnitEstimate"),
-                            "on_sale": sale_price is not None and sale_price < regular_price,
+                            "on_sale": sale_price is not None
+                            and sale_price < regular_price,
                         }
-                        
+
                         # Track price for this product
                         if regular_price:
                             try:
@@ -455,11 +472,13 @@ def search_products():
                                     regular_price=regular_price,
                                     sale_price=sale_price,
                                     location_id=location_id,
-                                    product_name=product.get("description")
+                                    product_name=product.get("description"),
                                 )
                                 formatted_product["price_tracking"] = price_change_info
                             except Exception as e:
-                                print(f"Warning: Price tracking failed for {product.get('productId')}: {e}")
+                                print(
+                                    f"Warning: Price tracking failed for {product.get('productId')}: {e}"
+                                )
 
                 # Add aisle information
                 if "aisleLocations" in product:
@@ -567,7 +586,7 @@ def add_to_cart():
                 "preferred_location_id": None,
             }
             cart_items = []
-        
+
         # Add to local tracking
         new_item = {
             "product_id": product_id,
@@ -581,7 +600,10 @@ def add_to_cart():
         # Check if item already exists in cart with the same product_id AND modality
         existing_item = None
         for item in cart_items:
-            if item.get("product_id") == product_id and item.get("modality") == modality:
+            if (
+                item.get("product_id") == product_id
+                and item.get("modality") == modality
+            ):
                 existing_item = item
                 break
 
@@ -649,44 +671,48 @@ def update_cart_quantity():
             try:
                 client = get_authenticated_client()
                 from kroger_mcp.tools.shared import get_preferred_location_id
-                
+
                 # Get the access token
                 token_info = client.client.token_info
                 access_token = token_info.get("access_token")
-                
+
                 if access_token:
                     import requests
-                    
+
                     # First, get the current carts to find the cart ID
                     headers = {
                         "Authorization": f"Bearer {access_token}",
-                        "Accept": "application/json"
+                        "Accept": "application/json",
                     }
-                    
-                    carts_response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                    
+
+                    carts_response = requests.get(
+                        "https://api.kroger.com/v1/carts", headers=headers
+                    )
+
                     if carts_response.status_code == 200:
                         carts_data = carts_response.json()
                         if "data" in carts_data and carts_data["data"]:
                             cart_id = carts_data["data"][0]["id"]  # Use first cart
-                            
+
                             # Update the item quantity in Kroger cart
                             update_url = f"https://api.kroger.com/v1/carts/{cart_id}/items/{product_id}"
                             update_data = {"quantity": new_quantity}
-                            
+
                             update_response = requests.put(
-                                update_url, 
+                                update_url,
                                 headers={**headers, "Content-Type": "application/json"},
-                                json=update_data
+                                json=update_data,
                             )
-                            
+
                             if update_response.status_code not in [200, 204]:
-                                print(f"Warning: Failed to update Kroger cart: {update_response.status_code}")
-                        
+                                print(
+                                    f"Warning: Failed to update Kroger cart: {update_response.status_code}"
+                                )
+
             except Exception as e:
                 print(f"Warning: Could not sync to Kroger cart: {e}")
                 # Continue anyway - local update succeeded
-            
+
             # Save updated cart in MCP format
             if isinstance(cart_data, dict) and "current_cart" in cart_data:
                 cart_data["current_cart"] = cart_items
@@ -751,28 +777,30 @@ def update_cart_modality():
             try:
                 client = get_authenticated_client()
                 from kroger_mcp.tools.shared import get_preferred_location_id
-                
+
                 # Get the access token
                 token_info = client.client.token_info
                 access_token = token_info.get("access_token")
-                
+
                 if access_token:
                     import requests
-                    
+
                     # Get current carts to find the cart ID and item details
                     headers = {
                         "Authorization": f"Bearer {access_token}",
-                        "Accept": "application/json"
+                        "Accept": "application/json",
                     }
-                    
-                    carts_response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                    
+
+                    carts_response = requests.get(
+                        "https://api.kroger.com/v1/carts", headers=headers
+                    )
+
                     if carts_response.status_code == 200:
                         carts_data = carts_response.json()
                         if "data" in carts_data and carts_data["data"]:
                             cart_id = carts_data["data"][0]["id"]  # Use first cart
                             kroger_cart = carts_data["data"][0]
-                            
+
                             # Find the item in the Kroger cart to get its current quantity
                             item_quantity = 1
                             if "items" in kroger_cart:
@@ -780,27 +808,29 @@ def update_cart_modality():
                                     if item.get("upc") == product_id:
                                         item_quantity = item.get("quantity", 1)
                                         break
-                            
+
                             # Update the item with new modality (need to include quantity)
                             update_url = f"https://api.kroger.com/v1/carts/{cart_id}/items/{product_id}"
                             update_data = {
                                 "quantity": item_quantity,
-                                "modality": new_modality
+                                "modality": new_modality,
                             }
-                            
+
                             update_response = requests.put(
-                                update_url, 
+                                update_url,
                                 headers={**headers, "Content-Type": "application/json"},
-                                json=update_data
+                                json=update_data,
                             )
-                            
+
                             if update_response.status_code not in [200, 204]:
-                                print(f"Warning: Failed to update Kroger cart modality: {update_response.status_code}")
-                        
+                                print(
+                                    f"Warning: Failed to update Kroger cart modality: {update_response.status_code}"
+                                )
+
             except Exception as e:
                 print(f"Warning: Could not sync modality to Kroger cart: {e}")
                 # Continue anyway - local update succeeded
-            
+
             # Save updated cart in MCP format
             if isinstance(cart_data, dict) and "current_cart" in cart_data:
                 cart_data["current_cart"] = cart_items
@@ -841,56 +871,69 @@ def remove_from_cart():
         try:
             client = get_authenticated_client()
             from kroger_mcp.tools.shared import get_preferred_location_id
-            
+
             # Get the access token
             token_info = client.client.token_info
             access_token = token_info.get("access_token")
-            
+
             if access_token:
                 import requests
-                
+
                 # Get current carts to find the cart ID
                 headers = {
                     "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json"
+                    "Accept": "application/json",
                 }
-                
-                carts_response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                
+
+                carts_response = requests.get(
+                    "https://api.kroger.com/v1/carts", headers=headers
+                )
+
                 if carts_response.status_code == 200:
                     carts_data = carts_response.json()
                     if "data" in carts_data and carts_data["data"]:
                         cart_id = carts_data["data"][0]["id"]  # Use first cart
-                        
+
                         # Remove the item from Kroger cart
                         remove_url = f"https://api.kroger.com/v1/carts/{cart_id}/items/{product_id}"
-                        
+
                         remove_response = requests.delete(remove_url, headers=headers)
-                        
-                        if remove_response.status_code in [200, 204, 404]:  # 404 is OK - item already gone
+
+                        if remove_response.status_code in [
+                            200,
+                            204,
+                            404,
+                        ]:  # 404 is OK - item already gone
                             # Now sync the updated cart back to local storage
                             # Fetch the updated cart from Kroger
-                            updated_carts_response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                            
+                            updated_carts_response = requests.get(
+                                "https://api.kroger.com/v1/carts", headers=headers
+                            )
+
                             if updated_carts_response.status_code == 200:
                                 updated_carts_data = updated_carts_response.json()
-                                
+
                                 # Convert to local format and save
                                 local_cart_items = []
-                                if "data" in updated_carts_data and updated_carts_data["data"]:
+                                if (
+                                    "data" in updated_carts_data
+                                    and updated_carts_data["data"]
+                                ):
                                     kroger_cart = updated_carts_data["data"][0]
                                     if "items" in kroger_cart:
                                         for item in kroger_cart["items"]:
                                             local_item = {
                                                 "product_id": item.get("upc"),
                                                 "quantity": item.get("quantity", 1),
-                                                "modality": item.get("modality", "PICKUP"),
+                                                "modality": item.get(
+                                                    "modality", "PICKUP"
+                                                ),
                                                 "added_at": datetime.now().isoformat(),
                                                 "last_updated": datetime.now().isoformat(),
                                                 "location_id": get_preferred_location_id(),
                                             }
                                             local_cart_items.append(local_item)
-                                
+
                                 # Save updated cart to local file
                                 cart_file = "kroger_cart.json"
                                 cart_data = {
@@ -900,20 +943,28 @@ def remove_from_cart():
                                 }
                                 with open(cart_file, "w") as f:
                                     json.dump(cart_data, f, indent=2)
-                            
-                            return jsonify({"success": True, "message": "Item removed from cart"})
+
+                            return jsonify(
+                                {"success": True, "message": "Item removed from cart"}
+                            )
                         else:
-                            raise Exception(f"Failed to remove from Kroger cart: {remove_response.status_code}")
+                            raise Exception(
+                                f"Failed to remove from Kroger cart: {remove_response.status_code}"
+                            )
                 else:
-                    raise Exception(f"Failed to get carts: {carts_response.status_code}")
+                    raise Exception(
+                        f"Failed to get carts: {carts_response.status_code}"
+                    )
             else:
                 raise Exception("No access token available")
-                
+
         except Exception as api_error:
-            return jsonify({
-                "success": False, 
-                "error": f"Failed to remove from Kroger cart: {str(api_error)}"
-            })
+            return jsonify(
+                {
+                    "success": False,
+                    "error": f"Failed to remove from Kroger cart: {str(api_error)}",
+                }
+            )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -925,31 +976,33 @@ def view_cart():
     try:
         # Always fetch fresh data from Kroger API
         all_cart_items = []
-        
+
         try:
             client = get_authenticated_client()
             from kroger_mcp.tools.shared import get_preferred_location_id
-            
+
             # Get the access token
             token_info = client.client.token_info
             access_token = token_info.get("access_token")
-            
+
             if access_token:
                 import requests
-                
+
                 # Fetch current cart from Kroger API
                 headers = {
                     "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json"
+                    "Accept": "application/json",
                 }
-                
-                carts_response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                
+
+                carts_response = requests.get(
+                    "https://api.kroger.com/v1/carts", headers=headers
+                )
+
                 if carts_response.status_code == 200:
                     carts_data = carts_response.json()
                     if "data" in carts_data and carts_data["data"]:
                         kroger_cart = carts_data["data"][0]  # Use first cart
-                        
+
                         # Convert Kroger cart items to our format
                         if "items" in kroger_cart:
                             for item in kroger_cart["items"]:
@@ -962,7 +1015,7 @@ def view_cart():
                                     "location_id": get_preferred_location_id(),
                                 }
                                 all_cart_items.append(cart_item)
-                        
+
                         # Also update local cache for consistency
                         cart_file = "kroger_cart.json"
                         cart_data = {
@@ -972,7 +1025,7 @@ def view_cart():
                         }
                         with open(cart_file, "w") as f:
                             json.dump(cart_data, f, indent=2)
-                            
+
         except Exception as api_error:
             print(f"Warning: Could not fetch from Kroger API: {api_error}")
             # Fall back to local cache if API fails
@@ -984,7 +1037,9 @@ def view_cart():
                         if isinstance(cart_data, dict) and "current_cart" in cart_data:
                             all_cart_items = cart_data.get("current_cart", [])
                         else:
-                            all_cart_items = cart_data if isinstance(cart_data, list) else []
+                            all_cart_items = (
+                                cart_data if isinstance(cart_data, list) else []
+                            )
                 except json.JSONDecodeError:
                     all_cart_items = []
 
@@ -1029,14 +1084,14 @@ def view_cart():
                                 price = item_data["price"]
                                 regular_price = price.get("regular")
                                 sale_price = price.get("promo")
-                                
+
                                 enhanced_item["pricing"] = {
                                     "regular_price": regular_price,
                                     "sale_price": sale_price,
                                     "on_sale": sale_price is not None
                                     and sale_price < regular_price,
                                 }
-                                
+
                                 # Track price for this product
                                 if regular_price:
                                     try:
@@ -1045,7 +1100,7 @@ def view_cart():
                                             regular_price=regular_price,
                                             sale_price=sale_price,
                                             location_id=location_id,
-                                            product_name=product.get("description")
+                                            product_name=product.get("description"),
                                         )
                                         enhanced_item["price_tracking"] = price_info
                                     except Exception as e:
@@ -1109,7 +1164,7 @@ def sync_cart():
     """Fetch cart from Kroger API and sync with local cart"""
     try:
         data = request.get_json() or {}
-        
+
         # Check if we should clear the cart
         if data.get("clear", False):
             cart_file = "kroger_cart.json"
@@ -1138,41 +1193,45 @@ def sync_cart():
             try:
                 # Get authenticated client for user cart access
                 client = get_authenticated_client()
-                
+
                 # Import the function we need
                 from kroger_mcp.tools.shared import get_preferred_location_id
-                
+
                 # Make direct API call to get user carts
                 import requests
-                
+
                 # Get the access token from the client
                 token_info = client.client.token_info
                 access_token = token_info.get("access_token")
-                
+
                 if not access_token:
                     raise Exception("No access token available")
-                
+
                 # Make direct API call to Kroger
                 headers = {
                     "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json"
+                    "Accept": "application/json",
                 }
-                
-                response = requests.get("https://api.kroger.com/v1/carts", headers=headers)
-                
+
+                response = requests.get(
+                    "https://api.kroger.com/v1/carts", headers=headers
+                )
+
                 if response.status_code == 200:
                     carts_response = response.json()
                     carts_result = {"success": True, "data": carts_response}
                 else:
-                    raise Exception(f"API call failed with status {response.status_code}: {response.text}")
-                
+                    raise Exception(
+                        f"API call failed with status {response.status_code}: {response.text}"
+                    )
+
                 if carts_result.get("success") and carts_result.get("data"):
                     carts_data = carts_result["data"]
-                    
+
                     if "data" in carts_data and carts_data["data"]:
                         # Use the first cart (most recent)
                         kroger_cart = carts_data["data"][0]
-                        
+
                         # Convert Kroger cart items to our local format
                         local_cart_items = []
                         if "items" in kroger_cart:
@@ -1186,7 +1245,7 @@ def sync_cart():
                                     "location_id": get_preferred_location_id(),
                                 }
                                 local_cart_items.append(local_item)
-                        
+
                         # Save to local cart file
                         cart_file = "kroger_cart.json"
                         cart_data = {
@@ -1196,12 +1255,14 @@ def sync_cart():
                         }
                         with open(cart_file, "w") as f:
                             json.dump(cart_data, f, indent=2)
-                        
-                        return jsonify({
-                            "success": True,
-                            "message": f"Successfully fetched and synced {len(local_cart_items)} items from Kroger cart",
-                            "items_count": len(local_cart_items)
-                        })
+
+                        return jsonify(
+                            {
+                                "success": True,
+                                "message": f"Successfully fetched and synced {len(local_cart_items)} items from Kroger cart",
+                                "items_count": len(local_cart_items),
+                            }
+                        )
                     else:
                         # No carts found, create empty local cart
                         cart_file = "kroger_cart.json"
@@ -1212,38 +1273,46 @@ def sync_cart():
                         }
                         with open(cart_file, "w") as f:
                             json.dump(cart_data, f, indent=2)
-                        
-                        return jsonify({
-                            "success": True,
-                            "message": "No items found in Kroger cart. Local cart cleared.",
-                            "items_count": 0
-                        })
+
+                        return jsonify(
+                            {
+                                "success": True,
+                                "message": "No items found in Kroger cart. Local cart cleared.",
+                                "items_count": 0,
+                            }
+                        )
                 else:
-                    raise Exception(f"Failed to get carts: {carts_result.get('error', 'Unknown error')}")
-                    
+                    raise Exception(
+                        f"Failed to get carts: {carts_result.get('error', 'Unknown error')}"
+                    )
+
             except Exception as api_error:
                 # If Kroger API fails, return error
-                return jsonify({
-                    "success": False,
-                    "error": f"Failed to fetch from Kroger API: {str(api_error)}",
-                    "note": "Make sure you're authenticated with cart.basic:rw scope"
-                })
-        
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": f"Failed to fetch from Kroger API: {str(api_error)}",
+                        "note": "Make sure you're authenticated with cart.basic:rw scope",
+                    }
+                )
+
         # Default behavior - create empty cart
         cart_file = "kroger_cart.json"
         cart_data = {
             "current_cart": [],
             "last_updated": datetime.now().isoformat(),
-            "preferred_location_id": get_preferred_location_id()
+            "preferred_location_id": get_preferred_location_id(),
         }
-        
+
         with open(cart_file, "w") as f:
             json.dump(cart_data, f, indent=2)
-        
-        return jsonify({
-            "success": True,
-            "message": "Cart initialized (local storage).",
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Cart initialized (local storage).",
+            }
+        )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -1255,26 +1324,27 @@ def clear_cart():
     try:
         # Use the MCP clear_cart tool which handles both Kroger API and local tracking
         import asyncio
-        
+
         # Import the MCP clear_cart function
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
         from kroger_mcp.tools.cart_tools import clear_cart as mcp_clear_cart
-        
+
         # Run the async MCP function
         result = asyncio.run(mcp_clear_cart())
-        
+
         if result.get("success"):
-            return jsonify({
-                "success": True, 
-                "message": result.get("message", "Cart cleared successfully"),
-                "items_cleared": result.get("items_cleared", 0)
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "message": result.get("message", "Cart cleared successfully"),
+                    "items_cleared": result.get("items_cleared", 0),
+                }
+            )
         else:
-            return jsonify({
-                "success": False,
-                "error": result.get("error", "Failed to clear cart")
-            })
-            
+            return jsonify(
+                {"success": False, "error": result.get("error", "Failed to clear cart")}
+            )
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -1327,7 +1397,10 @@ def update_all_cart_modality():
                     )
 
             return jsonify(
-                {"success": True, "message": f"Updated {updated_count} items to {new_modality}"}
+                {
+                    "success": True,
+                    "message": f"Updated {updated_count} items to {new_modality}",
+                }
             )
         else:
             return jsonify({"success": True, "message": "No items in cart to update"})
@@ -1394,22 +1467,23 @@ def auth_callback():
 
         # Update UI state
         ui_state["auth_status"] = True
-        
+
         # Print token information for debugging
         print("Authentication successful!")
         print("Token info:", token_info)
         print("Received scopes:", token_info.get("scope", "No scopes received"))
-        
+
         # Check if we received the cart scope by decoding the actual JWT token
         import base64
+
         try:
             access_token = token_info.get("access_token", "")
             if access_token:
                 # Decode JWT payload
-                parts = access_token.split('.')
+                parts = access_token.split(".")
                 if len(parts) >= 2:
                     payload = parts[1]
-                    payload += '=' * (4 - len(payload) % 4)  # Add padding
+                    payload += "=" * (4 - len(payload) % 4)  # Add padding
                     decoded = base64.b64decode(payload)
                     jwt_data = json.loads(decoded)
                     actual_scopes = jwt_data.get("scope", "").split(" ")
@@ -1425,7 +1499,7 @@ def auth_callback():
             print(f"Error decoding JWT: {e}")
             received_scopes = token_info.get("scope", "").split(" ")
             has_cart_scope = "cart.basic:rw" in received_scopes
-        
+
         message = "Authentication successful! You can now close this tab and return to the main app."
         if not has_cart_scope:
             message += " WARNING: The cart.basic:rw scope was not granted, which may limit cart functionality."
@@ -1439,7 +1513,7 @@ def auth_callback():
                 "expires_in": token_info.get("expires_in"),
                 "scope": token_info.get("scope"),
                 "has_refresh_token": "refresh_token" in token_info,
-                "has_cart_scope": has_cart_scope
+                "has_cart_scope": has_cart_scope,
             },
         )
 
@@ -1493,25 +1567,25 @@ def start_auth():
 
         # Try different scope combinations to see what's available
         # Let's test what scopes are actually available for your application
-        
+
         # Option 1: Try with no scopes to see basic access
         # scopes = ""
-        
+
         # Option 2: Try with just product scope
         # scopes = "product.compact"
-        
+
         # Option 3: Try with cart scope only
         # scopes = "cart.basic:write"
-        
+
         # Option 4: Try with both (original)
         # scopes = "product.compact cart.basic:rw"
-        
+
         # Option 5: Include profile scope to get user information
         # Using profile.name to get firstName and lastName
         # Adding profile.loyalty to get loyalty card information for purchase history
-        #scopes = "cart.basic:write product.compact product.personalized profile.compact profile.full profile.loyalty profile.loyaltyId profile.name urn:com:kroger:kr:purchase:history:read"
+        # scopes = "cart.basic:write product.compact product.personalized profile.compact profile.full profile.loyalty profile.loyaltyId profile.name urn:com:kroger:kr:purchase:history:read"
         scopes = "product.compact cart.basic:rw profile.name profile.loyalty"
-        
+
         print(f"Requesting scopes: {scopes}")
         print(f"Client ID: {client_id}")
         print(f"Redirect URI: {redirect_uri}")
@@ -1523,7 +1597,7 @@ def start_auth():
             code_challenge=_pkce_params["code_challenge"],
             code_challenge_method=_pkce_params["code_challenge_method"],
         )
-        
+
         print(f"Generated auth URL: {auth_url}")
 
         result = {
@@ -1533,8 +1607,10 @@ def start_auth():
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
                 "requested_scopes": scopes,
-                "auth_url_preview": auth_url[:100] + "..." if len(auth_url) > 100 else auth_url
-            }
+                "auth_url_preview": (
+                    auth_url[:100] + "..." if len(auth_url) > 100 else auth_url
+                ),
+            },
         }
         return jsonify({"success": True, "data": result})
     except Exception as e:
@@ -1568,32 +1644,37 @@ def auth_status():
         ui_state["auth_status"] = is_valid
 
         # Use the exact same working logic from debug endpoint
-        token_info = client.client.token_info if hasattr(client, 'client') and hasattr(client.client, 'token_info') else None
+        token_info = (
+            client.client.token_info
+            if hasattr(client, "client") and hasattr(client.client, "token_info")
+            else None
+        )
         scopes = []
-        
+
         if token_info:
             try:
                 access_token = token_info.get("access_token", "")
                 if access_token:
                     import base64
-                    parts = access_token.split('.')
+
+                    parts = access_token.split(".")
                     if len(parts) >= 2:
                         payload = parts[1]
-                        payload += '=' * (4 - len(payload) % 4)
+                        payload += "=" * (4 - len(payload) % 4)
                         decoded = base64.b64decode(payload)
                         jwt_data = json.loads(decoded)
                         scopes = jwt_data.get("scope", "").split(" ")
                         # Filter out empty strings
                         scopes = [s for s in scopes if s.strip()]
                     else:
-                        scopes = token_info.get('scope', '').split(' ')
+                        scopes = token_info.get("scope", "").split(" ")
                         scopes = [s for s in scopes if s.strip()]
                 else:
-                    scopes = token_info.get('scope', '').split(' ')
+                    scopes = token_info.get("scope", "").split(" ")
                     scopes = [s for s in scopes if s.strip()]
             except Exception as e:
                 print(f"Error decoding JWT: {e}")
-                scopes = token_info.get('scope', '').split(' ') if token_info else []
+                scopes = token_info.get("scope", "").split(" ") if token_info else []
                 scopes = [s for s in scopes if s.strip()]
 
         # Try to get user name from preferences first, then profile API
@@ -1602,32 +1683,33 @@ def auth_status():
             # Check for user-defined display name in preferences
             try:
                 import json
-                with open('kroger_preferences.json', 'r') as f:
+
+                with open("kroger_preferences.json", "r") as f:
                     prefs = json.load(f)
-                    user_name = prefs.get('display_name')
+                    user_name = prefs.get("display_name")
             except (FileNotFoundError, json.JSONDecodeError, KeyError):
                 pass
-            
+
             # Since scope parsing is problematic, try to get profile directly
             print(f"Available scopes: {scopes}")
-            
+
             # If no custom display name, try to get from profile API directly
             if not user_name:
                 try:
                     print("Attempting to fetch profile data directly...")
                     profile = client.identity.get_profile()
                     print(f"Raw profile response: {profile}")
-                    
+
                     if profile and "data" in profile:
                         profile_data = profile["data"]
                         print(f"Profile data keys: {list(profile_data.keys())}")
-                        
+
                         # Try to extract actual user name from profile
                         first_name = profile_data.get("firstName")
-                        last_name = profile_data.get("lastName") 
-                        
+                        last_name = profile_data.get("lastName")
+
                         print(f"Name fields - first: {first_name}, last: {last_name}")
-                        
+
                         if first_name and last_name:
                             user_name = f"{first_name} {last_name}"
                         elif first_name:
@@ -1635,8 +1717,12 @@ def auth_status():
                         else:
                             # Fallback to profile ID if no name fields available
                             profile_id = profile_data.get("id", "")
-                            user_name = f"Kroger User {profile_id[:8]}" if profile_id else "Shopper"
-                            
+                            user_name = (
+                                f"Kroger User {profile_id[:8]}"
+                                if profile_id
+                                else "Shopper"
+                            )
+
                         print(f"Final extracted user name: {user_name}")
                     else:
                         print("No profile data in response")
@@ -1644,7 +1730,7 @@ def auth_status():
                 except Exception as profile_error:
                     print(f"Error getting profile info: {profile_error}")
                     user_name = "Shopper"
-            
+
             if not user_name:
                 user_name = "Shopper"
         except Exception as e:
@@ -1658,7 +1744,7 @@ def auth_status():
             "message": f"Authentication token is {'valid' if is_valid else 'invalid'}",
             "scopes": scopes,
             "has_cart_scope": "cart.basic:write" in scopes,
-            "user_name": user_name
+            "user_name": user_name,
         }
         return jsonify({"success": True, "data": result})
     except Exception as e:
@@ -1679,17 +1765,20 @@ def logout():
     """Force logout/deauthentication by removing the token"""
     try:
         from kroger_mcp.tools.shared import invalidate_authenticated_client
-        
+
         # Invalidate the client to force re-authentication
         invalidate_authenticated_client()
-        
+
         # Remove token files
-        token_files = [".kroger_token_user.json", ".kroger_token_client_product.compact.json"]
+        token_files = [
+            ".kroger_token_user.json",
+            ".kroger_token_client_product.compact.json",
+        ]
         for token_file in token_files:
             if os.path.exists(token_file):
                 os.remove(token_file)
                 print(f"Removed token file: {token_file}")
-        
+
         # Clear the cart since we're no longer authenticated
         cart_file = "kroger_cart.json"
         if os.path.exists(cart_file):
@@ -1705,26 +1794,25 @@ def logout():
                 print("Cleared cart data on logout")
             except Exception as cart_error:
                 print(f"Warning: Could not clear cart: {cart_error}")
-        
+
         # Clear global state
         global _pkce_params, _auth_state
         _pkce_params = None
         _auth_state = None
-        
+
         # Update UI state
         ui_state["auth_status"] = False
         ui_state["cart_items"] = []
-        
-        return jsonify({
-            "success": True,
-            "message": "Successfully logged out. Cart has been cleared.",
-            "cart_cleared": True
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Successfully logged out. Cart has been cleared.",
+                "cart_cleared": True,
+            }
+        )
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Failed to logout: {str(e)}"
-        })
+        return jsonify({"success": False, "error": f"Failed to logout: {str(e)}"})
 
 
 @app.route("/callback")
@@ -1755,17 +1843,19 @@ def legacy_callback():
 def get_price_alerts():
     """Get products with significant price drops"""
     try:
-        threshold = float(request.args.get('threshold', 10.0))
+        threshold = float(request.args.get("threshold", 10.0))
         alerts = price_tracker.get_price_alerts(threshold_percentage=threshold)
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "alerts": alerts,
-                "count": len(alerts),
-                "threshold_percentage": threshold
+
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "alerts": alerts,
+                    "count": len(alerts),
+                    "threshold_percentage": threshold,
+                },
             }
-        })
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -1778,18 +1868,20 @@ if __name__ == "__main__":
 def get_price_history(product_id):
     """Get price history for a specific product"""
     try:
-        days = int(request.args.get('days', 30))
+        days = int(request.args.get("days", 30))
         history = price_tracker.get_price_history(product_id, days=days)
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "product_id": product_id,
-                "history": history,
-                "days": days,
-                "count": len(history)
+
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "product_id": product_id,
+                    "history": history,
+                    "days": days,
+                    "count": len(history),
+                },
             }
-        })
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -1799,17 +1891,12 @@ def get_tracked_products():
     """Get all tracked products with their latest prices"""
     try:
         products = price_tracker.get_tracked_products()
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "products": products,
-                "count": len(products)
-            }
-        })
+
+        return jsonify(
+            {"success": True, "data": {"products": products, "count": len(products)}}
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+
 # Removed duplicate price tracking endpoints - they are already defined above
-
-
