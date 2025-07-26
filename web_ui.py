@@ -39,13 +39,46 @@ app.secret_key = "your-secret-key-change-this"
 _pkce_params = None
 _auth_state = None
 
-# Store for UI state
+# Store for UI state and caching
 ui_state = {
     "preferred_location": None,
     "last_search_results": [],
     "cart_items": [],
     "auth_status": False,
 }
+
+# Search result cache
+search_cache = {}
+CACHE_DURATION = 300  # 5 minutes in seconds
+
+# Auth status cache
+auth_status_cache = {}
+AUTH_STATUS_CACHE_DURATION = 300  # 5 minutes in seconds
+
+# Cart view cache
+cart_view_cache = {}
+CART_VIEW_CACHE_DURATION = 60  # 1 minute for cart (shorter since it changes more frequently)
+
+def cleanup_search_cache():
+    """Remove expired cache entries"""
+    import time
+    current_time = time.time()
+    expired_keys = [
+        key for key, value in search_cache.items()
+        if current_time - value["timestamp"] > CACHE_DURATION
+    ]
+    for key in expired_keys:
+        del search_cache[key]
+    if expired_keys:
+        print(f"Cleaned up {len(expired_keys)} expired cache entries")
+
+def clear_all_caches():
+    """Clear all caches - useful for debugging"""
+    global search_cache, auth_status_cache, cart_view_cache
+    search_cache.clear()
+    auth_status_cache.clear()
+    cart_view_cache.clear()
+    print("All caches cleared")
 
 
 @app.route("/")
@@ -357,13 +390,31 @@ def get_product_details():
                 # Add pricing information
                 if "price" in item:
                     price = item["price"]
+                    regular_price = price.get("regular")
+                    sale_price = price.get("promo")
+                    
                     formatted_product["pricing"] = {
-                        "regular_price": price.get("regular"),
-                        "sale_price": price.get("promo"),
+                        "regular_price": regular_price,
+                        "sale_price": sale_price,
                         "regular_per_unit": price.get("regularPerUnitEstimate"),
-                        "on_sale": price.get("promo") is not None
-                        and price.get("promo") < price.get("regular", float("inf")),
+                        "on_sale": sale_price is not None
+                        and sale_price < regular_price,
                     }
+                    
+                    # Add price tracking information for PDP
+                    if regular_price:
+                        try:
+                            product_id_for_tracking = product.get("productId")
+                            if product_id_for_tracking in price_tracker.price_data:
+                                # Get existing price change info without adding new entries
+                                current_price = sale_price if sale_price else regular_price
+                                price_change_info = price_tracker._analyze_price_change(
+                                    product_id_for_tracking, 
+                                    current_price
+                                )
+                                formatted_product["price_tracking"] = price_change_info
+                        except Exception as e:
+                            print(f"Warning: Price tracking failed for PDP {product_id_for_tracking}: {e}")
 
             # Add aisle information
             if "aisleLocations" in product:
@@ -400,10 +451,29 @@ def get_product_details():
 
 @app.route("/api/products/search", methods=["POST"])
 def search_products():
-    """Search for products"""
+    """Search for products with caching"""
     data = request.get_json()
     term = data.get("term", "")
     limit = data.get("limit", 10)
+    
+    # Create cache key
+    from kroger_mcp.tools.shared import get_preferred_location_id
+    location_id = get_preferred_location_id()
+    cache_key = f"{term.lower()}:{limit}:{location_id}"
+    
+    # Clean up expired cache entries periodically
+    cleanup_search_cache()
+    
+    # Check cache first
+    import time
+    current_time = time.time()
+    if cache_key in search_cache:
+        cached_result = search_cache[cache_key]
+        if current_time - cached_result["timestamp"] < CACHE_DURATION:
+            print(f"Cache hit for search: {term}")
+            return jsonify({"success": True, "data": cached_result["data"], "cached": True})
+    
+    print(f"Cache miss for search: {term} - fetching from API")
 
     try:
         # Call the Kroger API directly using the correct method
@@ -464,21 +534,46 @@ def search_products():
                             and sale_price < regular_price,
                         }
 
-                        # Track price for this product
+                        # Smart price tracking - only track if significant time has passed
                         if regular_price:
                             try:
-                                price_change_info = price_tracker.track_price(
-                                    product_id=product.get("productId"),
-                                    regular_price=regular_price,
-                                    sale_price=sale_price,
-                                    location_id=location_id,
-                                    product_name=product.get("description"),
-                                )
+                                product_id = product.get("productId")
+                                current_price = sale_price if sale_price else regular_price
+                                
+                                should_track_price = False
+                                if product_id not in price_tracker.price_data:
+                                    # New product - track it
+                                    should_track_price = True
+                                else:
+                                    # Check if enough time has passed since last update
+                                    from datetime import datetime, timedelta
+                                    last_updated = price_tracker.price_data[product_id].get("last_updated")
+                                    if last_updated:
+                                        last_update_time = datetime.fromisoformat(last_updated)
+                                        time_since_update = datetime.now() - last_update_time
+                                        # Only track if more than 1 hour has passed
+                                        if time_since_update > timedelta(hours=1):
+                                            should_track_price = True
+                                
+                                if should_track_price:
+                                    price_change_info = price_tracker.track_price(
+                                        product_id=product_id,
+                                        regular_price=regular_price,
+                                        sale_price=sale_price,
+                                        location_id=location_id,
+                                        product_name=product.get("description"),
+                                    )
+                                    print(f"Tracked price for {product_id}: ${current_price}")
+                                else:
+                                    # Use existing data without tracking new price
+                                    price_change_info = price_tracker._analyze_price_change(
+                                        product_id, 
+                                        price_tracker.price_data[product_id]["price_history"][-1]["current_price"]
+                                    )
+                                
                                 formatted_product["price_tracking"] = price_change_info
                             except Exception as e:
-                                print(
-                                    f"Warning: Price tracking failed for {product.get('productId')}: {e}"
-                                )
+                                print(f"Warning: Price tracking failed for {product.get('productId')}: {e}")
 
                 # Add aisle information
                 if "aisleLocations" in product:
@@ -519,6 +614,13 @@ def search_products():
                 "search_term": term,
             }
             ui_state["last_search_results"] = formatted_products
+            
+            # Cache the result
+            search_cache[cache_key] = {
+                "data": result,
+                "timestamp": current_time
+            }
+            print(f"Cached search result for: {term}")
         else:
             result = {"success": False, "message": "No products found"}
 
@@ -526,6 +628,68 @@ def search_products():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+
+@app.route("/api/cache/status", methods=["GET"])
+def get_cache_status():
+    """Get cache status for debugging"""
+    import time
+    current_time = time.time()
+    
+    # Search cache info
+    search_info = []
+    for key, value in search_cache.items():
+        age_seconds = current_time - value["timestamp"]
+        search_info.append({
+            "key": key,
+            "age_seconds": round(age_seconds, 1),
+            "expires_in": round(CACHE_DURATION - age_seconds, 1),
+            "product_count": len(value["data"]["products"])
+        })
+    
+    # Auth cache info
+    auth_info = None
+    if "auth_result" in auth_status_cache:
+        auth_cache = auth_status_cache["auth_result"]
+        age_seconds = current_time - auth_cache["timestamp"]
+        auth_info = {
+            "age_seconds": round(age_seconds, 1),
+            "expires_in": round(AUTH_STATUS_CACHE_DURATION - age_seconds, 1),
+            "authenticated": auth_cache["data"]["data"]["authenticated"]
+        }
+    
+    # Cart cache info
+    cart_info = None
+    if "cart_data" in cart_view_cache:
+        cart_cache = cart_view_cache["cart_data"]
+        age_seconds = current_time - cart_cache["timestamp"]
+        cart_info = {
+            "age_seconds": round(age_seconds, 1),
+            "expires_in": round(CART_VIEW_CACHE_DURATION - age_seconds, 1),
+            "item_count": len(cart_cache["data"]["data"]["cart_items"])
+        }
+    
+    return jsonify({
+        "success": True,
+        "search_cache": {
+            "entries": len(search_cache),
+            "duration": CACHE_DURATION,
+            "details": search_info
+        },
+        "auth_cache": {
+            "duration": AUTH_STATUS_CACHE_DURATION,
+            "details": auth_info
+        },
+        "cart_cache": {
+            "duration": CART_VIEW_CACHE_DURATION,
+            "details": cart_info
+        }
+    })
+
+@app.route("/api/cache/clear", methods=["POST"])
+def clear_cache():
+    """Clear all caches"""
+    clear_all_caches()
+    return jsonify({"success": True, "message": "All caches cleared"})
 
 @app.route("/api/cart/add", methods=["POST"])
 def add_to_cart():
@@ -623,6 +787,10 @@ def add_to_cart():
         with open(cart_file, "w") as f:
             json.dump(cart_data, f, indent=2)
 
+        # Clear cart view cache since cart changed
+        if "cart_data" in cart_view_cache:
+            del cart_view_cache["cart_data"]
+        
         result = {
             "success": True,
             "message": f"Added {quantity} item(s) to cart",
@@ -972,7 +1140,19 @@ def remove_from_cart():
 
 @app.route("/api/cart/view", methods=["GET"])
 def view_cart():
-    """View current cart with enhanced product details - always fetch from Kroger API"""
+    """View current cart with enhanced product details - with caching"""
+    import time
+    current_time = time.time()
+    
+    # Check cache first
+    if "cart_data" in cart_view_cache:
+        cached_result = cart_view_cache["cart_data"]
+        if current_time - cached_result["timestamp"] < CART_VIEW_CACHE_DURATION:
+            print("Cart view cache hit")
+            return jsonify(cached_result["data"])
+    
+    print("Cart view cache miss - fetching from API")
+    
     try:
         # Always fetch fresh data from Kroger API
         all_cart_items = []
@@ -1154,7 +1334,15 @@ def view_cart():
             "count": len(enhanced_cart_items),
             "message": "Enhanced cart view with product details and images",
         }
-        return jsonify({"success": True, "data": result})
+        
+        # Cache the result
+        response_data = {"success": True, "data": result}
+        cart_view_cache["cart_data"] = {
+            "data": response_data,
+            "timestamp": current_time
+        }
+        
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -1345,6 +1533,39 @@ def clear_cart():
                 {"success": False, "error": result.get("error", "Failed to clear cart")}
             )
 
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/cart/clear-local", methods=["POST"])
+def clear_local_cart():
+    """Clear only the local cart tracking - does NOT affect your actual Kroger cart"""
+    try:
+        import asyncio
+
+        # Import the MCP clear_local_cart_tracking function
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+        from kroger_mcp.tools.cart_tools import clear_local_cart_tracking
+
+        # Run the async MCP function
+        result = asyncio.run(clear_local_cart_tracking())
+
+        if result.get("success"):
+            # Clear cart view cache since cart changed
+            if "cart_data" in cart_view_cache:
+                del cart_view_cache["cart_data"]
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": result.get("message", "Local cart tracking cleared"),
+                    "items_cleared": result.get("items_cleared", 0),
+                }
+            )
+        else:
+            return jsonify(
+                {"success": False, "error": result.get("error", "Failed to clear local cart tracking")}
+            )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -1635,12 +1856,30 @@ def check_auth_completion():
 
 @app.route("/api/auth/status", methods=["GET"])
 def auth_status():
-    """Check authentication status"""
+    """Check authentication status with caching"""
+    import time
+    current_time = time.time()
+    
+    # Check cache first
+    if "auth_result" in auth_status_cache:
+        cached_result = auth_status_cache["auth_result"]
+        age_seconds = current_time - cached_result["timestamp"]
+        if age_seconds < AUTH_STATUS_CACHE_DURATION:
+            print(f"Auth status cache hit (age: {age_seconds:.1f}s)")
+            return jsonify(cached_result["data"])
+        else:
+            print(f"Auth status cache expired (age: {age_seconds:.1f}s)")
+    else:
+        print("Auth status cache miss - no cached result")
+    
     try:
         # Try to get authenticated client to test if auth is working
         client = get_authenticated_client()
         is_valid = client.test_current_token()
-
+        
+        print(f"[AUTH_STATUS] Token validation result: {is_valid}")
+        if not is_valid:
+            print(f"[AUTH_STATUS] Token validation failed - this may be expected if user is not authenticated")
         ui_state["auth_status"] = is_valid
 
         # Use the exact same working logic from debug endpoint
@@ -1651,9 +1890,12 @@ def auth_status():
         )
         scopes = []
 
+        print(f"Token info available: {token_info is not None}")
         if token_info:
+            print(f"Token info keys: {list(token_info.keys()) if token_info else 'None'}")
             try:
                 access_token = token_info.get("access_token", "")
+                print(f"Access token length: {len(access_token) if access_token else 0}")
                 if access_token:
                     import base64
 
@@ -1682,8 +1924,6 @@ def auth_status():
         try:
             # Check for user-defined display name in preferences
             try:
-                import json
-
                 with open("kroger_preferences.json", "r") as f:
                     prefs = json.load(f)
                     user_name = prefs.get("display_name")
@@ -1741,12 +1981,20 @@ def auth_status():
             "success": True,
             "authenticated": is_valid,
             "token_valid": is_valid,
-            "message": f"Authentication token is {'valid' if is_valid else 'invalid'}",
+            "message": f"Authentication token is {'valid' if is_valid else 'not authenticated'}",
             "scopes": scopes,
             "has_cart_scope": "cart.basic:write" in scopes,
             "user_name": user_name,
         }
-        return jsonify({"success": True, "data": result})
+        
+        # Cache the successful result
+        response_data = {"success": True, "data": result}
+        auth_status_cache["auth_result"] = {
+            "data": response_data,
+            "timestamp": current_time
+        }
+        
+        return jsonify(response_data)
     except Exception as e:
         ui_state["auth_status"] = False
         result = {
@@ -1755,9 +2003,15 @@ def auth_status():
             "token_valid": False,
             "error": str(e),
         }
-        return jsonify(
-            {"success": True, "data": result}
-        )  # Still return success=True for the outer wrapper
+        
+        # Cache the error result too (but for shorter duration)
+        response_data = {"success": True, "data": result}
+        auth_status_cache["auth_result"] = {
+            "data": response_data,
+            "timestamp": current_time - AUTH_STATUS_CACHE_DURATION + 30  # Cache errors for only 30 seconds
+        }
+        
+        return jsonify(response_data)  # Still return success=True for the outer wrapper
 
 
 @app.route("/api/auth/logout", methods=["POST"])
@@ -1768,6 +2022,10 @@ def logout():
 
         # Invalidate the client to force re-authentication
         invalidate_authenticated_client()
+        
+        # Clear auth status cache
+        if "auth_result" in auth_status_cache:
+            del auth_status_cache["auth_result"]
 
         # Remove token files
         token_files = [
@@ -1860,10 +2118,6 @@ def get_price_alerts():
         return jsonify({"success": False, "error": str(e)})
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
-
-
 @app.route("/api/price-tracking/history/<product_id>", methods=["GET"])
 def get_price_history(product_id):
     """Get price history for a specific product"""
@@ -1899,4 +2153,153 @@ def get_tracked_products():
         return jsonify({"success": False, "error": str(e)})
 
 
+@app.route("/api/price-tracking/hide-product", methods=["POST"])
+def hide_product():
+    """Hide a product from price alerts"""
+    try:
+        data = request.get_json()
+        product_id = data.get("product_id")
+
+        print(f"DEBUG: Attempting to hide product: {product_id}")  # Debug log
+
+        if not product_id:
+            return jsonify({"success": False, "error": "Product ID is required"})
+
+        # Check if the method exists
+        if not hasattr(price_tracker, "hide_product"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "hide_product method not available - server restart required",
+                }
+            )
+
+        success = price_tracker.hide_product(product_id)
+        print(f"DEBUG: Hide product result: {success}")  # Debug log
+
+        if success:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Product {product_id} hidden from price alerts",
+                }
+            )
+        else:
+            return jsonify(
+                {"success": False, "error": "Product was already hidden or not found"}
+            )
+    except Exception as e:
+        print(f"DEBUG: Exception in hide_product: {str(e)}")  # Debug log
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/price-tracking/unhide-product", methods=["POST"])
+def unhide_product():
+    """Unhide a product (show in price alerts again)"""
+    try:
+        data = request.get_json()
+        product_id = data.get("product_id")
+
+        if not product_id:
+            return jsonify({"success": False, "error": "Product ID is required"})
+
+        success = price_tracker.unhide_product(product_id)
+
+        if success:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Product {product_id} will now appear in price alerts",
+                }
+            )
+        else:
+            return jsonify(
+                {"success": False, "error": "Product was not hidden or not found"}
+            )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/price-tracking/test", methods=["GET"])
+def test_price_tracking():
+    """Test endpoint to verify price tracking routes work"""
+    return jsonify({"success": True, "message": "Price tracking API is working"})
+
+
+@app.route("/api/price-tracking/remove-product", methods=["POST"])
+def remove_product():
+    """Permanently remove a product from price tracking"""
+    try:
+        data = request.get_json()
+        product_id = data.get("product_id")
+
+        print(f"DEBUG: Attempting to remove product: {product_id}")  # Debug log
+
+        if not product_id:
+            return jsonify({"success": False, "error": "Product ID is required"})
+
+        # Check if the method exists
+        if not hasattr(price_tracker, "remove_product"):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "remove_product method not available - server restart required",
+                }
+            )
+
+        success = price_tracker.remove_product(product_id)
+        print(f"DEBUG: Remove product result: {success}")  # Debug log
+
+        if success:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Product {product_id} permanently removed from price tracking",
+                }
+            )
+        else:
+            return jsonify(
+                {"success": False, "error": "Product not found in price tracking"}
+            )
+    except Exception as e:
+        print(f"DEBUG: Exception in remove_product: {str(e)}")  # Debug log
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/price-tracking/hidden-products", methods=["GET"])
+def get_hidden_products():
+    """Get list of hidden products"""
+    try:
+        hidden_products = price_tracker.get_hidden_products()
+
+        return jsonify(
+            {
+                "success": True,
+                "data": {"products": hidden_products, "count": len(hidden_products)},
+            }
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/price-tracking/removed-products", methods=["GET"])
+def get_removed_products():
+    """Get list of permanently removed products"""
+    try:
+        removed_products = price_tracker.get_removed_products()
+
+        return jsonify(
+            {
+                "success": True,
+                "data": {"products": removed_products, "count": len(removed_products)},
+            }
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
 # Removed duplicate price tracking endpoints - they are already defined above
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000, debug=True)

@@ -75,18 +75,8 @@ const fetchActualKrogerCart = async () => {
 
 // Cart functions
 const updateCartView = async () => {
-    try {
-        // Always fetch ALL cart items for the header count
-        const response = await fetch('/api/cart/view');
-        const result = await response.json();
-        if (result.success) {
-            const cartItems = result.data.cart_items;
-            const totalQuantity = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
-            document.getElementById('cartItemCount').textContent = totalQuantity;
-        }
-    } catch (error) {
-        console.error('Error updating cart view:', error);
-    }
+    // Use the consolidated cart count update function
+    await updateCartCount();
 };
 
 const quickAddToCart = async (productId) => {
@@ -653,9 +643,56 @@ const confirmClearCart = async () => {
     }
 };
 
+// Confirm and execute local cart clearing only
+const confirmClearLocalCart = async () => {
+    closeClearCartModal();
+    
+    // Show loading state for the clear button
+    const clearButton = document.querySelector('[data-action="clear-cart"]');
+    if (clearButton) {
+        clearButton.disabled = true;
+        clearButton.innerHTML = '⏳';
+    }
+
+    try {
+        await retryWithBackoff(async () => {
+            const response = await fetch('/api/cart/clear-local', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Local clear failed');
+            }
+            
+            return result;
+        });
+
+        showToast('✅ Local cart tracking cleared', 'success');
+        await viewCart();
+        await updateCartView();
+        
+    } catch (error) {
+        console.error('Error clearing local cart:', error);
+        showToast(`❌ Failed to clear local cart: ${error.message}`, 'error');
+    } finally {
+        // Restore the clear button
+        if (clearButton) {
+            clearButton.disabled = false;
+            clearButton.innerHTML = '🗑️';
+        }
+    }
+};
+
 // Make functions globally available
 window.closeClearCartModal = closeClearCartModal;
 window.confirmClearCart = confirmClearCart;
+window.confirmClearLocalCart = confirmClearLocalCart;
 
 // Helper functions
 const checkAuthStatusForCart = async () => {
@@ -669,18 +706,27 @@ const checkAuthStatusForCart = async () => {
     }
 };
 
-// Update cart count in header
+// Update cart count in header - consolidated function
 const updateCartCount = async () => {
     try {
         const response = await fetch('/api/cart/view');
         const result = await response.json();
         if (result.success) {
-            const cartItems = result.data.cart_items;
+            const cartItems = result.data.cart_items || [];
             const totalQuantity = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
-            document.getElementById('cartItemCount').textContent = totalQuantity;
+            const countElement = document.getElementById('cartItemCount');
+            if (countElement) {
+                countElement.textContent = totalQuantity;
+                console.log(`Cart count updated: ${totalQuantity}`);
+            }
         }
     } catch (error) {
         console.error('Error updating cart count:', error);
+        // Set to 0 on error to avoid showing stale data
+        const countElement = document.getElementById('cartItemCount');
+        if (countElement) {
+            countElement.textContent = '0';
+        }
     }
 };
 
@@ -1074,4 +1120,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setGlobalModality(this.value);
         });
     }
+    
+    // Initialize cart count on page load
+    updateCartCount();
 });

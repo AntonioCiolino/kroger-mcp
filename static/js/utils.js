@@ -152,7 +152,7 @@ const authenticateWithKroger = async () => {
 // Cache auth status to reduce API calls
 let authStatusCache = null;
 let authStatusCacheTime = 0;
-const AUTH_CACHE_DURATION = 30000; // 30 seconds
+const AUTH_CACHE_DURATION = 300000; // 5 minutes (reduced API calls)
 
 // Helper function to update auth UI elements
 const updateAuthStatusUI = (result, statusIndicator, statusText, headerLoginStatus, loginText, loginIcon) => {
@@ -172,7 +172,7 @@ const updateAuthStatusUI = (result, statusIndicator, statusText, headerLoginStat
     } else {
         // Update modal status
         statusIndicator.className = 'status-indicator status-disconnected';
-        statusText.textContent = '❌ Not authenticated';
+        statusText.textContent = '⚪ Not authenticated';
         
         // Update header status
         if (headerLoginStatus && loginText && loginIcon) {
@@ -260,7 +260,12 @@ const logoutFromKroger = async () => {
         
         if (result.success) {
             showToast('✅ Logged out successfully', 'success');
-            await checkAuthStatus(true); // Force refresh status after logout
+            
+            // Clear the cart UI display
+            clearCartUI();
+            
+            // Force refresh auth status after logout
+            await checkAuthStatus(true);
         } else {
             throw new Error(result.error || 'Logout failed');
         }
@@ -273,7 +278,131 @@ const logoutFromKroger = async () => {
     }
 };
 
+// Clear cart UI display
+const clearCartUI = () => {
+    // Clear cart items display
+    const cartItems = document.getElementById('cartItems');
+    if (cartItems) {
+        cartItems.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Cart is empty</p>';
+    }
+    
+    // Reset cart summary
+    const cartSummary = document.getElementById('cartSummary');
+    if (cartSummary) {
+        cartSummary.innerHTML = `
+            <div class="cart-summary">
+                <div class="summary-row">
+                    <span>Items:</span>
+                    <span>0</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total:</span>
+                    <span>$0.00</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Update cart count badge if it exists
+    const cartCount = document.getElementById('cartItemCount');
+    if (cartCount) {
+        cartCount.textContent = '0';
+    }
+    
+    // Clear any cart-related local storage or cached data
+    if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('cartCache');
+        localStorage.removeItem('cartTimestamp');
+    }
+    
+    console.log('Cart UI cleared after logout');
+};
+
+// Handle user name/login click - smart behavior based on auth status
+const handleUserClick = async () => {
+    try {
+        const authResult = await checkAuthStatus();
+        if (authResult && authResult.data && authResult.data.authenticated) {
+            // User is authenticated - show dropdown menu
+            showUserDropdown(authResult.data);
+        } else {
+            // User is not authenticated - open auth modal
+            toggleAuth();
+        }
+    } catch (error) {
+        console.error('Error checking auth status:', error);
+        // Fallback to opening auth modal
+        toggleAuth();
+    }
+};
+
+// Show user dropdown menu
+const showUserDropdown = (userData) => {
+    // Remove any existing dropdown
+    const existingDropdown = document.getElementById('userDropdown');
+    if (existingDropdown) {
+        existingDropdown.remove();
+    }
+
+    const userName = userData.user_name || 'User';
+    const scopes = userData.scopes || [];
+    const hasCartScope = userData.has_cart_scope || false;
+
+    // Create dropdown element
+    const dropdown = document.createElement('div');
+    dropdown.id = 'userDropdown';
+    dropdown.className = 'user-dropdown';
+    dropdown.innerHTML = `
+        <div class="user-dropdown-content">
+            <div class="user-info">
+                <div class="user-name">👋 ${userName}</div>
+                <div class="user-status">✅ Authenticated</div>
+            </div>
+            <div class="user-scopes">
+                <small>Permissions: ${scopes.length > 0 ? scopes.join(', ') : 'None'}</small>
+            </div>
+            <div class="dropdown-actions">
+                <button onclick="toggleAuth()" class="dropdown-btn">⚙️ Auth Settings</button>
+                <button onclick="logoutFromKroger(); closeUserDropdown();" class="dropdown-btn logout-btn">🚪 Logout</button>
+            </div>
+        </div>
+    `;
+
+    // Position dropdown relative to login indicator
+    const loginIndicator = document.querySelector('.login-indicator');
+    if (loginIndicator) {
+        loginIndicator.appendChild(dropdown);
+        
+        // Add click outside to close
+        setTimeout(() => {
+            document.addEventListener('click', closeUserDropdownOnClickOutside);
+        }, 100);
+    }
+};
+
+// Close user dropdown
+const closeUserDropdown = () => {
+    const dropdown = document.getElementById('userDropdown');
+    if (dropdown) {
+        dropdown.remove();
+    }
+    document.removeEventListener('click', closeUserDropdownOnClickOutside);
+};
+
+// Close dropdown when clicking outside
+const closeUserDropdownOnClickOutside = (event) => {
+    const dropdown = document.getElementById('userDropdown');
+    const loginIndicator = document.querySelector('.login-indicator');
+    
+    if (dropdown && !loginIndicator.contains(event.target)) {
+        closeUserDropdown();
+    }
+};
+
 // Make auth functions globally available
 window.authenticateWithKroger = authenticateWithKroger;
 window.checkAuthStatus = checkAuthStatus;
 window.logoutFromKroger = logoutFromKroger;
+window.clearCartUI = clearCartUI;
+window.handleUserClick = handleUserClick;
+window.closeUserDropdown = closeUserDropdown;

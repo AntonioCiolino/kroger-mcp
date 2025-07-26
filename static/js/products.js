@@ -33,6 +33,11 @@ const searchProducts = async () => {
         }
 
         displayProductResults(result.data);
+        
+        // Show cache status if result was cached
+        if (result.cached) {
+            showToast('📋 Results from cache (faster!)', 'info');
+        }
     } catch (error) {
         showResults('productResults', 'Error: ' + error.message, true);
     }
@@ -41,7 +46,7 @@ const searchProducts = async () => {
 // Handle limit dropdown change - automatically search if there's a previous search term
 const onLimitChange = () => {
     const term = document.getElementById('searchTerm').value;
-    
+
     // Only auto-search if there's already a search term
     if (term.trim()) {
         searchProducts();
@@ -89,6 +94,8 @@ const displayProductResults = (data) => {
         html += `
             <div class="product-card">
                 ${onSale ? '<div class="sale-badge">SALE</div>' : ''}
+                ${priceDropBadge}
+                ${lowestPriceBadge}
                 <div class="product-image" onclick="showProductDetails('${product.productId}')" style="cursor: pointer;" title="Click to view product details">
                     ${imageUrl ? `<img src="${imageUrl}" alt="${product.description}">` : '📦'}
                 </div>
@@ -173,12 +180,21 @@ const displayProductDetails = (product) => {
         regularPrice ? `$${regularPrice.toFixed(2)}` : 'Price not available';
     const priceClass = onSale ? 'product-details-price on-sale' : 'product-details-price';
 
+    // Check for price tracking info for badges
+    const priceTracking = product.price_tracking || {};
+    const priceDropBadge = priceTracking.price_dropped ?
+        `<div class="price-drop-badge">📉 Price Drop!</div>` : '';
+    const lowestPriceBadge = priceTracking.is_lowest_ever ?
+        `<div class="lowest-price-badge">🎯 Lowest Ever!</div>` : '';
+
     // Make sure we're using the correct product ID field
     const productId = product.product_id || product.productId;
 
     let html = `
         <div class="product-details-header">
             <div class="product-details-image">
+                ${priceDropBadge}
+                ${lowestPriceBadge}
                 ${imageUrl ? `<img src="${imageUrl}" alt="${product.description}">` : '📦'}
             </div>
             <div class="product-details-info">
@@ -293,10 +309,10 @@ const addToCartFromDetails = async (productId) => {
     const quantity = parseInt(document.getElementById('detailsQuantity').value);
     const modality = document.getElementById('detailsModality').value;
     const button = document.querySelector('.add-to-cart-btn');
-    
+
     // Store original button content
     const originalContent = button.innerHTML;
-    
+
     try {
         // Show authentication warning if needed
         const authResult = await checkAuthStatus();
@@ -333,11 +349,11 @@ const addToCartFromDetails = async (productId) => {
                     ✅ Added to Cart!
                 </div>
             `;
-            
+
             const modalityText = modality === 'PICKUP' ? 'Pickup' : 'Delivery';
             showToast(`✅ Added ${quantity} item(s) to cart for ${modalityText}!`, 'success');
             await updateCartView();
-            
+
             // Close modal after brief delay
             setTimeout(() => {
                 closeProductDetails();
@@ -371,16 +387,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Price tracking functions
 const togglePriceAlerts = async () => {
-    const alertsSection = document.getElementById('priceAlerts');
-
-    if (alertsSection.style.display === 'none') {
-        // Show alerts and load data
-        alertsSection.style.display = 'block';
-        await loadPriceAlerts();
-    } else {
-        // Hide alerts
-        alertsSection.style.display = 'none';
-    }
+    // Use the new panel instead of the old section
+    togglePriceAlertsPanel();
 };
 
 const loadPriceAlerts = async () => {
@@ -388,7 +396,16 @@ const loadPriceAlerts = async () => {
     content.innerHTML = 'Loading price alerts...';
 
     try {
-        const response = await fetch('/api/price-tracking/alerts?threshold=5');
+        // Get threshold from localStorage or use default of 2%
+        const threshold = localStorage.getItem('priceAlertThreshold') || '2';
+
+        // Update the dropdown to match the current threshold
+        const thresholdSelect = document.getElementById('thresholdSelect');
+        if (thresholdSelect) {
+            thresholdSelect.value = threshold;
+        }
+
+        const response = await fetch(`/api/price-tracking/alerts?threshold=${threshold}`);
         const result = await response.json();
 
         if (result.success && result.data.alerts.length > 0) {
@@ -410,6 +427,12 @@ const loadPriceAlerts = async () => {
                             <button class="price-alert-add-btn" onclick="quickAddToCart('${alert.product_id}')" title="Add to cart">
                                 🛒 Add to Cart
                             </button>
+                            <button class="price-alert-hide-btn" onclick="hidePriceAlert('${alert.product_id}')" title="Hide this product from alerts">
+                                👁️‍🗨️ Hide
+                            </button>
+                            <button class="price-alert-remove-btn" onclick="removePriceAlert('${alert.product_id}')" title="Permanently remove from price tracking">
+                                🗑️ Remove
+                            </button>
                         </div>
                     </div>
                 `;
@@ -424,18 +447,221 @@ const loadPriceAlerts = async () => {
     }
 };
 
+const updatePriceAlertThreshold = () => {
+    const thresholdSelect = document.getElementById('thresholdSelect');
+    const newThreshold = thresholdSelect.value;
+
+    // Save to localStorage
+    localStorage.setItem('priceAlertThreshold', newThreshold);
+
+    // Show loading and reload alerts with new threshold
+    const content = document.getElementById('priceAlertsContent');
+    content.innerHTML = `Loading price alerts with ${newThreshold}% threshold...`;
+
+    // Reload alerts with new threshold
+    loadPriceAlerts();
+
+    showToast(`✅ Price alert threshold set to ${newThreshold}%`, 'success');
+};
+
+const hidePriceAlert = async (productId) => {
+    if (!confirm('Hide this product from price alerts? You can unhide it later in settings.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/price-tracking/hide-product', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('✅ Product hidden from price alerts', 'success');
+            // Reload alerts to remove the hidden item
+            loadPriceAlerts();
+        } else {
+            showToast('❌ ' + (result.error || 'Failed to hide product'), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Error hiding product', 'error');
+        console.error('Error hiding product:', error);
+    }
+};
+
+const removePriceAlert = async (productId) => {
+    if (!confirm('Permanently remove this product from price tracking? This cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/price-tracking/remove-product', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('✅ Product permanently removed from price tracking', 'success');
+            // Reload alerts to remove the deleted item
+            loadPriceAlerts();
+        } else {
+            showToast('❌ ' + (result.error || 'Failed to remove product'), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Error removing product', 'error');
+        console.error('Error removing product:', error);
+    }
+};
+
+const togglePriceAlertsPanel = () => {
+    const panel = document.getElementById('priceAlertsPanel');
+    
+    if (!panel) {
+        console.error('Price alerts panel element not found!');
+        showToast('❌ Price alerts panel not found', 'error');
+        return;
+    }
+    
+    if (panel.style.display === 'none' || !panel.classList.contains('show')) {
+        // Open panel
+        panel.style.display = 'block';
+        setTimeout(() => panel.classList.add('show'), 10);
+        
+        // Load initial content based on active tab
+        const activeTab = document.querySelector('.tab-btn.active').id;
+        if (activeTab === 'alertsTab') {
+            loadPriceAlerts();
+        } else {
+            loadHiddenProducts();
+        }
+    } else {
+        // Close panel
+        panel.classList.remove('show');
+        setTimeout(() => panel.style.display = 'none', 300);
+    }
+};
+
+const closePriceAlertsPanel = () => {
+    const panel = document.getElementById('priceAlertsPanel');
+    if (panel) {
+        panel.classList.remove('show');
+        setTimeout(() => panel.style.display = 'none', 300);
+    }
+};
+
+const switchPriceAlertsTab = (tabName) => {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(tabName + 'Tab').classList.add('active');
+    
+    // Show/hide threshold controls (only show for alerts tab)
+    const thresholdControls = document.getElementById('thresholdControls');
+    if (tabName === 'alerts') {
+        thresholdControls.style.display = 'flex';
+        loadPriceAlerts();
+    } else {
+        thresholdControls.style.display = 'none';
+        loadHiddenProducts();
+    }
+};
+
+const loadHiddenProducts = async () => {
+    const content = document.getElementById('hiddenProductsContent');
+    content.innerHTML = 'Loading hidden products...';
+
+    try {
+        const response = await fetch('/api/price-tracking/hidden-products');
+        const result = await response.json();
+
+        if (result.success && result.data.products.length > 0) {
+            let html = `<div style="margin-bottom: 12px; padding: 12px; background: #fff3cd; border-radius: 4px; font-size: 14px; color: #856404;">
+                📊 ${result.data.count} product(s) are currently hidden from price alerts.
+            </div>`;
+            
+            result.data.products.forEach(product => {
+                html += `
+                    <div class="hidden-product-item">
+                        <div class="hidden-product-info">
+                            <div class="hidden-product-name">${product.product_name}</div>
+                            <div class="hidden-product-details">
+                                Last price: $${product.last_price.toFixed(2)} • 
+                                Updated: ${new Date(product.last_updated).toLocaleDateString()}
+                            </div>
+                        </div>
+                        <button class="unhide-btn" onclick="unhideProduct('${product.product_id}')" title="Show this product in price alerts again">
+                            👁️ Unhide
+                        </button>
+                    </div>
+                `;
+            });
+            content.innerHTML = html;
+        } else {
+            content.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🎉</div>
+                    <h4 style="margin: 0 0 8px 0; color: #495057;">No hidden products!</h4>
+                    <p style="font-size: 14px; margin: 0;">All your tracked products are visible in price alerts.</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        content.innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">❌ Error loading hidden products. Please try again.</div>';
+        console.error('Error loading hidden products:', error);
+    }
+};
+
+const unhideProduct = async (productId) => {
+    try {
+        const response = await fetch('/api/price-tracking/unhide-product', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ product_id: productId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('✅ Product unhidden - will now appear in price alerts', 'success');
+            // Reload hidden products list
+            await loadHiddenProducts();
+            // If alerts tab is active, refresh it too
+            const alertsTab = document.getElementById('alertsTab');
+            if (alertsTab && alertsTab.classList.contains('active')) {
+                await loadPriceAlerts();
+            }
+        } else {
+            showToast('❌ ' + (result.error || 'Failed to unhide product'), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Error unhiding product', 'error');
+        console.error('Error unhiding product:', error);
+    }
+};
+
 // Make functions globally available
 window.togglePriceAlerts = togglePriceAlerts;
+window.togglePriceAlertsPanel = togglePriceAlertsPanel;
+window.closePriceAlertsPanel = closePriceAlertsPanel;
+window.switchPriceAlertsTab = switchPriceAlertsTab;
+window.updatePriceAlertThreshold = updatePriceAlertThreshold;
+window.hidePriceAlert = hidePriceAlert;
+window.removePriceAlert = removePriceAlert;
+window.unhideProduct = unhideProduct;
 
 // Utility function to escape HTML and problematic characters
 const escapeHtml = (text) => {
     if (!text) return '';
-    
+
     // Create a temporary div to safely escape HTML
     const div = document.createElement('div');
     div.textContent = text;
     let escaped = div.innerHTML;
-    
+
     // Additional escaping for problematic characters that could break JavaScript
     escaped = escaped
         .replace(/'/g, '&#39;')     // Single quotes
@@ -445,7 +671,7 @@ const escapeHtml = (text) => {
         .replace(/\r?\n/g, ' ')     // Line breaks
         .replace(/\r/g, ' ')        // Carriage returns
         .replace(/\t/g, ' ');       // Tabs
-    
+
     return escaped;
 };
 
@@ -454,7 +680,7 @@ const openImageModalSafe = (element) => {
     const imageUrl = element.dataset.imageUrl;
     const productName = element.dataset.productName;
     const allImagesJson = element.dataset.allImages;
-    
+
     let allImages;
     try {
         allImages = JSON.parse(allImagesJson);
@@ -462,7 +688,7 @@ const openImageModalSafe = (element) => {
         console.error('Error parsing images data:', e);
         allImages = [{ url: imageUrl, perspective: 'main' }];
     }
-    
+
     openImageModal(imageUrl, productName, allImages);
 };
 

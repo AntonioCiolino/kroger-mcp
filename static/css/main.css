@@ -279,6 +279,149 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     background: #c82333;
 }
 
+/* Clear options styling */
+.clear-options {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.clear-option {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f8f9fa;
+}
+
+.clear-option h4 {
+    margin: 0 0 8px 0;
+    color: #495057;
+    font-size: 14px;
+}
+
+.clear-option p {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: #6c757d;
+}
+
+.clear-option button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.btn-local {
+    background: #17a2b8;
+    color: white;
+}
+
+.btn-local:hover {
+    background: #138496;
+}
+
+/* User dropdown menu */
+.user-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1000;
+    margin-top: 8px;
+}
+
+.user-dropdown-content {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 16px;
+    min-width: 250px;
+    animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.user-info {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.user-name {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.user-status {
+    font-size: 12px;
+    color: #28a745;
+}
+
+.user-scopes {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.user-scopes small {
+    color: #6c757d;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.dropdown-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dropdown-btn {
+    padding: 8px 12px;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    background: #f8f9fa;
+    color: #495057;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.dropdown-btn:hover {
+    background: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.logout-btn {
+    background: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.logout-btn:hover {
+    background: #c82333;
+    border-color: #bd2130;
+}
+
+/* Make login indicator relative for dropdown positioning */
+.login-indicator {
+    position: relative;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -345,10 +488,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     margin-bottom: 20px;
 }
 
+.price-alerts-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
 .price-alerts h3 {
     color: #495057;
-    margin-bottom: 12px;
+    margin: 0;
     font-size: 16px;
+}
+
+.price-alerts-controls {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: #666;
 }
 
 .price-alert-item {
@@ -382,7 +539,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 8px;
+    gap: 6px;
 }
 
 .price-alert-badge {
@@ -414,6 +571,133 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .price-alert-add-btn:disabled {
     background: #6c757d;
     cursor: not-allowed;
+}
+
+.price-alert-hide-btn {
+    background: #ffc107;
+    color: #212529;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.price-alert-hide-btn:hover {
+    background: #e0a800;
+}
+
+.price-alert-remove-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.price-alert-remove-btn:hover {
+    background: #c82333;
+}
+
+/* Price Alerts Panel */
+.price-alerts-controls-panel {
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+}
+
+.price-alerts-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.tab-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #495057;
+}
+
+.tab-btn:hover {
+    background: #e9ecef;
+}
+
+.tab-btn.active {
+    background: #0066cc;
+    color: white;
+    border-color: #0066cc;
+}
+
+.threshold-controls {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: #666;
+}
+
+.tab-content {
+    display: block;
+}
+
+.tab-content:not(.active) {
+    display: none;
+}
+
+.hidden-product-item {
+    background: white;
+    border: 1px solid #ffeaa7;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.hidden-product-info {
+    flex: 1;
+}
+
+.hidden-product-name {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.hidden-product-details {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.unhide-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.unhide-btn:hover {
+    background: #218838;
 }/* Auth Mod
 al */
 .auth-modal {

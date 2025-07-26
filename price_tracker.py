@@ -9,14 +9,16 @@ from typing import Dict, List, Optional, Tuple
 
 
 class PriceTracker:
-    def __init__(self, data_file="price_history.json"):
+    def __init__(self, data_file="price_history.json", blacklist_file="price_blacklist.json"):
         self.data_file = data_file
+        self.blacklist_file = blacklist_file
         self.price_data = self._load_data()
+        self.blacklist = self._load_blacklist()
         
         # Configuration settings
-        self.max_entries_per_product = 30  # Keep last 30 price entries
+        self.max_entries_per_product = 15  # Keep last 15 price entries
         self.max_age_days = 90  # Keep data for 90 days
-        self.default_alert_threshold = 5.0  # 5% price drop threshold
+        self.default_alert_threshold = 2.0  # 2% price drop threshold
 
     def _load_data(self) -> Dict:
         """Load price data from JSON file"""
@@ -35,6 +37,21 @@ class PriceTracker:
         with open(self.data_file, "w") as f:
             json.dump(self.price_data, f, indent=2)
     
+    def _load_blacklist(self) -> Dict:
+        """Load blacklist data from JSON file"""
+        if os.path.exists(self.blacklist_file):
+            try:
+                with open(self.blacklist_file, "r") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                pass
+        return {"hidden_products": [], "removed_products": []}
+    
+    def _save_blacklist(self):
+        """Save blacklist data to JSON file"""
+        with open(self.blacklist_file, "w") as f:
+            json.dump(self.blacklist, f, indent=2)
+    
     def _cleanup_old_data(self, max_age_days: int = 90):
         """Remove price entries older than max_age_days"""
         cutoff_date = datetime.now() - timedelta(days=max_age_days)
@@ -46,6 +63,10 @@ class PriceTracker:
                     entry for entry in data["price_history"]
                     if datetime.fromisoformat(entry["timestamp"]) > cutoff_date
                 ]
+                
+                # Enforce max entries per product cap
+                if len(data["price_history"]) > self.max_entries_per_product:
+                    data["price_history"] = data["price_history"][-self.max_entries_per_product:]
                 
                 # If no recent entries, remove the entire product
                 if not data["price_history"]:
@@ -89,6 +110,11 @@ class PriceTracker:
         }
 
         product_data["price_history"].append(price_entry)
+        
+        # Enforce max entries per product cap
+        if len(product_data["price_history"]) > self.max_entries_per_product:
+            product_data["price_history"] = product_data["price_history"][-self.max_entries_per_product:]
+        
         product_data["last_updated"] = now
 
         # Update product name if provided
@@ -181,10 +207,15 @@ class PriceTracker:
         ]
 
     def get_price_alerts(self, threshold_percentage: float = 10.0) -> List[Dict]:
-        """Get products with significant price drops"""
+        """Get products with significant price drops (excluding blacklisted items)"""
         alerts = []
+        hidden_products = self.blacklist.get("hidden_products", [])
 
         for product_id, data in self.price_data.items():
+            # Skip hidden products
+            if product_id in hidden_products:
+                continue
+                
             if len(data["price_history"]) < 2:
                 continue
 
@@ -212,6 +243,76 @@ class PriceTracker:
                     )
 
         return sorted(alerts, key=lambda x: x["drop_percentage"], reverse=True)
+
+        return sorted(alerts, key=lambda x: x["drop_percentage"], reverse=True)
+    
+    def hide_product(self, product_id: str) -> bool:
+        """Hide a product from price alerts (blacklist)"""
+        hidden_products = self.blacklist.get("hidden_products", [])
+        if product_id not in hidden_products:
+            hidden_products.append(product_id)
+            self.blacklist["hidden_products"] = hidden_products
+            self._save_blacklist()
+            return True
+        return False
+    
+    def unhide_product(self, product_id: str) -> bool:
+        """Unhide a product (remove from blacklist)"""
+        hidden_products = self.blacklist.get("hidden_products", [])
+        if product_id in hidden_products:
+            hidden_products.remove(product_id)
+            self.blacklist["hidden_products"] = hidden_products
+            self._save_blacklist()
+            return True
+        return False
+    
+    def remove_product(self, product_id: str) -> bool:
+        """Permanently remove a product from price tracking"""
+        if product_id in self.price_data:
+            # Add to removed list for reference
+            removed_products = self.blacklist.get("removed_products", [])
+            if product_id not in removed_products:
+                removed_products.append({
+                    "product_id": product_id,
+                    "product_name": self.price_data[product_id].get("product_name", "Unknown"),
+                    "removed_at": datetime.now().isoformat()
+                })
+                self.blacklist["removed_products"] = removed_products
+            
+            # Remove from price data
+            del self.price_data[product_id]
+            
+            # Also remove from hidden list if present
+            hidden_products = self.blacklist.get("hidden_products", [])
+            if product_id in hidden_products:
+                hidden_products.remove(product_id)
+                self.blacklist["hidden_products"] = hidden_products
+            
+            self._save_data()
+            self._save_blacklist()
+            return True
+        return False
+    
+    def get_hidden_products(self) -> List[Dict]:
+        """Get list of hidden products with their details"""
+        hidden_products = []
+        hidden_ids = self.blacklist.get("hidden_products", [])
+        
+        for product_id in hidden_ids:
+            if product_id in self.price_data:
+                data = self.price_data[product_id]
+                hidden_products.append({
+                    "product_id": product_id,
+                    "product_name": data.get("product_name", "Unknown Product"),
+                    "last_price": data["price_history"][-1]["current_price"] if data["price_history"] else 0,
+                    "last_updated": data.get("last_updated", "Unknown")
+                })
+        
+        return hidden_products
+    
+    def get_removed_products(self) -> List[Dict]:
+        """Get list of permanently removed products"""
+        return self.blacklist.get("removed_products", [])
 
     def get_tracked_products(self) -> List[Dict]:
         """Get all tracked products with their latest prices"""

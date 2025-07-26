@@ -30,7 +30,7 @@ export FLASK_DEBUG=1
 
 # Start the web application
 echo "🚀 Starting Flask web app..."
-echo "   Web interface will be available at: http://localhost:5000"
+echo "   Web interface will be available at: http://localhost:8000"
 echo "   Use Ctrl+C to stop the server"
 echo ""
 

@@ -204,6 +204,33 @@
     text-transform: uppercase;
 }
 
+.price-drop-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #dc3545;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.lowest-price-badge {
+    position: absolute;
+    top: 35px;
+    left: 10px;
+    background: #28a745;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 2;
+}
+
 /* Product Details Modal */
 .product-details-actions {
     display: flex;

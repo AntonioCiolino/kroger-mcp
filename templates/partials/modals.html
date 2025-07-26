@@ -27,6 +27,51 @@
     </div>
 </div>
 
+<!-- Price Alerts Panel -->
+<div id="priceAlertsPanel" class="cart-panel" style="display: none;">
+    <div class="cart-panel-header">
+        <h3>📉 Price Drop Alerts</h3>
+        <button onclick="closePriceAlertsPanel()" class="cart-close-btn">✕</button>
+    </div>
+    <div class="cart-panel-content">
+        <!-- Price Alerts Controls -->
+        <div class="price-alerts-controls-panel">
+            <div class="price-alerts-tabs">
+                <button id="alertsTab" class="tab-btn active" onclick="switchPriceAlertsTab('alerts')">
+                    📉 Price Alerts
+                </button>
+                <button id="hiddenTab" class="tab-btn" onclick="switchPriceAlertsTab('hidden')">
+                    ⚙️ Hidden Products
+                </button>
+            </div>
+            <div class="threshold-controls" id="thresholdControls">
+                <label for="thresholdSelect" style="font-size: 12px; margin-right: 5px;">Min. drop:</label>
+                <select id="thresholdSelect"
+                    style="padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #ddd;"
+                    onchange="updatePriceAlertThreshold()">
+                    <option value="1">1%</option>
+                    <option value="2" selected>2%</option>
+                    <option value="3">3%</option>
+                    <option value="5">5%</option>
+                    <option value="10">10%</option>
+                    <option value="15">15%</option>
+                    <option value="20">20%</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Price Alerts Content -->
+        <div id="priceAlertsContent" class="tab-content active">
+            Loading price alerts...
+        </div>
+
+        <!-- Hidden Products Content -->
+        <div id="hiddenProductsContent" class="tab-content" style="display: none;">
+            Loading hidden products...
+        </div>
+    </div>
+</div>
+
 <!-- Product Details Modal -->
 <div id="productDetailsModal" class="popup-overlay" style="display: none;">
     <div class="popup-content product-details-modal">
@@ -56,14 +101,14 @@
             <p>Enter your cart items below. Each line should be in the format:</p>
             <p><code>product_id,quantity</code></p>
             <p>Example: <code>0001111042248,2</code></p>
-            
+
             <div class="form-group">
-                <textarea id="manualCartItems" rows="10" style="width: 100%; padding: 10px; font-family: monospace;" 
+                <textarea id="manualCartItems" rows="10" style="width: 100%; padding: 10px; font-family: monospace;"
                     placeholder="0001111042248,2
 0001111091188,1
 0001111050624,1"></textarea>
             </div>
-            
+
             <div class="form-actions">
                 <button onclick="submitManualCartItems()" class="btn-primary">Import Items</button>
                 <button onclick="closeManualCartEntry()" class="btn-secondary">Cancel</button>
@@ -74,11 +119,25 @@
 Clear Cart Confirmation Modal -->
 <div id="clearCartModal" class="clear-cart-modal">
     <div class="clear-cart-modal-content">
-        <h3>🗑️ Clear Cart</h3>
-        <p>Are you sure you want to remove all items from your cart? This action cannot be undone.</p>
+        <h3>🗑️ Clear Cart Options</h3>
+        <p>Choose what you want to clear:</p>
+        
+        <div class="clear-options">
+            <div class="clear-option">
+                <h4>📱 Clear Local Tracking Only</h4>
+                <p>Clears only the local cart display. Your actual Kroger cart in the app/website remains unchanged.</p>
+                <button class="btn-local" onclick="confirmClearLocalCart()">Clear Local Only</button>
+            </div>
+            
+            <div class="clear-option">
+                <h4>🛒 Clear Actual Kroger Cart</h4>
+                <p>Removes all items from your actual Kroger cart (app/website). This action cannot be undone.</p>
+                <button class="btn-confirm" onclick="confirmClearCart()">Clear Kroger Cart</button>
+            </div>
+        </div>
+        
         <div class="clear-cart-modal-actions">
             <button class="btn-cancel" onclick="closeClearCartModal()">Cancel</button>
-            <button class="btn-confirm" onclick="confirmClearCart()">Clear Cart</button>
         </div>
     </div>
 </div>
