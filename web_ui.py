@@ -57,20 +57,26 @@ AUTH_STATUS_CACHE_DURATION = 300  # 5 minutes in seconds
 
 # Cart view cache
 cart_view_cache = {}
-CART_VIEW_CACHE_DURATION = 60  # 1 minute for cart (shorter since it changes more frequently)
+CART_VIEW_CACHE_DURATION = (
+    60  # 1 minute for cart (shorter since it changes more frequently)
+)
+
 
 def cleanup_search_cache():
     """Remove expired cache entries"""
     import time
+
     current_time = time.time()
     expired_keys = [
-        key for key, value in search_cache.items()
+        key
+        for key, value in search_cache.items()
         if current_time - value["timestamp"] > CACHE_DURATION
     ]
     for key in expired_keys:
         del search_cache[key]
     if expired_keys:
         print(f"Cleaned up {len(expired_keys)} expired cache entries")
+
 
 def clear_all_caches():
     """Clear all caches - useful for debugging"""
@@ -307,12 +313,18 @@ def debug_profile():
             "success": True,
             "has_token": token_info is not None,
             "scopes": scopes,
-            "has_profile_scope": "profile.name" in scopes,
+            "has_profile_scope": any(
+                scope in scopes
+                for scope in ["profile.compact", "profile.full", "profile.name"]
+            ),
             "profile_data": None,
             "error": None,
         }
 
-        if "profile.name" in scopes:
+        if any(
+            scope in scopes
+            for scope in ["profile.compact", "profile.full", "profile.name"]
+        ):
             try:
                 profile = client.identity.get_profile()
                 result["profile_data"] = profile
@@ -326,7 +338,7 @@ def debug_profile():
                 result["profile_data"] = None
         else:
             result["error"] = (
-                "profile.name scope not available - need to re-authenticate"
+                "Profile scope not available - need to re-authenticate with profile.compact or profile.full"
             )
 
         return jsonify(result)
@@ -392,7 +404,7 @@ def get_product_details():
                     price = item["price"]
                     regular_price = price.get("regular")
                     sale_price = price.get("promo")
-                    
+
                     formatted_product["pricing"] = {
                         "regular_price": regular_price,
                         "sale_price": sale_price,
@@ -400,21 +412,24 @@ def get_product_details():
                         "on_sale": sale_price is not None
                         and sale_price < regular_price,
                     }
-                    
+
                     # Add price tracking information for PDP
                     if regular_price:
                         try:
                             product_id_for_tracking = product.get("productId")
                             if product_id_for_tracking in price_tracker.price_data:
                                 # Get existing price change info without adding new entries
-                                current_price = sale_price if sale_price else regular_price
+                                current_price = (
+                                    sale_price if sale_price else regular_price
+                                )
                                 price_change_info = price_tracker._analyze_price_change(
-                                    product_id_for_tracking, 
-                                    current_price
+                                    product_id_for_tracking, current_price
                                 )
                                 formatted_product["price_tracking"] = price_change_info
                         except Exception as e:
-                            print(f"Warning: Price tracking failed for PDP {product_id_for_tracking}: {e}")
+                            print(
+                                f"Warning: Price tracking failed for PDP {product_id_for_tracking}: {e}"
+                            )
 
             # Add aisle information
             if "aisleLocations" in product:
@@ -455,24 +470,28 @@ def search_products():
     data = request.get_json()
     term = data.get("term", "")
     limit = data.get("limit", 10)
-    
+
     # Create cache key
     from kroger_mcp.tools.shared import get_preferred_location_id
+
     location_id = get_preferred_location_id()
     cache_key = f"{term.lower()}:{limit}:{location_id}"
-    
+
     # Clean up expired cache entries periodically
     cleanup_search_cache()
-    
+
     # Check cache first
     import time
+
     current_time = time.time()
     if cache_key in search_cache:
         cached_result = search_cache[cache_key]
         if current_time - cached_result["timestamp"] < CACHE_DURATION:
             print(f"Cache hit for search: {term}")
-            return jsonify({"success": True, "data": cached_result["data"], "cached": True})
-    
+            return jsonify(
+                {"success": True, "data": cached_result["data"], "cached": True}
+            )
+
     print(f"Cache miss for search: {term} - fetching from API")
 
     try:
@@ -538,8 +557,10 @@ def search_products():
                         if regular_price:
                             try:
                                 product_id = product.get("productId")
-                                current_price = sale_price if sale_price else regular_price
-                                
+                                current_price = (
+                                    sale_price if sale_price else regular_price
+                                )
+
                                 should_track_price = False
                                 if product_id not in price_tracker.price_data:
                                     # New product - track it
@@ -547,14 +568,21 @@ def search_products():
                                 else:
                                     # Check if enough time has passed since last update
                                     from datetime import datetime, timedelta
-                                    last_updated = price_tracker.price_data[product_id].get("last_updated")
+
+                                    last_updated = price_tracker.price_data[
+                                        product_id
+                                    ].get("last_updated")
                                     if last_updated:
-                                        last_update_time = datetime.fromisoformat(last_updated)
-                                        time_since_update = datetime.now() - last_update_time
+                                        last_update_time = datetime.fromisoformat(
+                                            last_updated
+                                        )
+                                        time_since_update = (
+                                            datetime.now() - last_update_time
+                                        )
                                         # Only track if more than 1 hour has passed
                                         if time_since_update > timedelta(hours=1):
                                             should_track_price = True
-                                
+
                                 if should_track_price:
                                     price_change_info = price_tracker.track_price(
                                         product_id=product_id,
@@ -563,17 +591,25 @@ def search_products():
                                         location_id=location_id,
                                         product_name=product.get("description"),
                                     )
-                                    print(f"Tracked price for {product_id}: ${current_price}")
+                                    print(
+                                        f"Tracked price for {product_id}: ${current_price}"
+                                    )
                                 else:
                                     # Use existing data without tracking new price
-                                    price_change_info = price_tracker._analyze_price_change(
-                                        product_id, 
-                                        price_tracker.price_data[product_id]["price_history"][-1]["current_price"]
+                                    price_change_info = (
+                                        price_tracker._analyze_price_change(
+                                            product_id,
+                                            price_tracker.price_data[product_id][
+                                                "price_history"
+                                            ][-1]["current_price"],
+                                        )
                                     )
-                                
+
                                 formatted_product["price_tracking"] = price_change_info
                             except Exception as e:
-                                print(f"Warning: Price tracking failed for {product.get('productId')}: {e}")
+                                print(
+                                    f"Warning: Price tracking failed for {product.get('productId')}: {e}"
+                                )
 
                 # Add aisle information
                 if "aisleLocations" in product:
@@ -614,12 +650,9 @@ def search_products():
                 "search_term": term,
             }
             ui_state["last_search_results"] = formatted_products
-            
+
             # Cache the result
-            search_cache[cache_key] = {
-                "data": result,
-                "timestamp": current_time
-            }
+            search_cache[cache_key] = {"data": result, "timestamp": current_time}
             print(f"Cached search result for: {term}")
         else:
             result = {"success": False, "message": "No products found"}
@@ -633,19 +666,22 @@ def search_products():
 def get_cache_status():
     """Get cache status for debugging"""
     import time
+
     current_time = time.time()
-    
+
     # Search cache info
     search_info = []
     for key, value in search_cache.items():
         age_seconds = current_time - value["timestamp"]
-        search_info.append({
-            "key": key,
-            "age_seconds": round(age_seconds, 1),
-            "expires_in": round(CACHE_DURATION - age_seconds, 1),
-            "product_count": len(value["data"]["products"])
-        })
-    
+        search_info.append(
+            {
+                "key": key,
+                "age_seconds": round(age_seconds, 1),
+                "expires_in": round(CACHE_DURATION - age_seconds, 1),
+                "product_count": len(value["data"]["products"]),
+            }
+        )
+
     # Auth cache info
     auth_info = None
     if "auth_result" in auth_status_cache:
@@ -654,9 +690,9 @@ def get_cache_status():
         auth_info = {
             "age_seconds": round(age_seconds, 1),
             "expires_in": round(AUTH_STATUS_CACHE_DURATION - age_seconds, 1),
-            "authenticated": auth_cache["data"]["data"]["authenticated"]
+            "authenticated": auth_cache["data"]["data"]["authenticated"],
         }
-    
+
     # Cart cache info
     cart_info = None
     if "cart_data" in cart_view_cache:
@@ -665,31 +701,32 @@ def get_cache_status():
         cart_info = {
             "age_seconds": round(age_seconds, 1),
             "expires_in": round(CART_VIEW_CACHE_DURATION - age_seconds, 1),
-            "item_count": len(cart_cache["data"]["data"]["cart_items"])
+            "item_count": len(cart_cache["data"]["data"]["cart_items"]),
         }
-    
-    return jsonify({
-        "success": True,
-        "search_cache": {
-            "entries": len(search_cache),
-            "duration": CACHE_DURATION,
-            "details": search_info
-        },
-        "auth_cache": {
-            "duration": AUTH_STATUS_CACHE_DURATION,
-            "details": auth_info
-        },
-        "cart_cache": {
-            "duration": CART_VIEW_CACHE_DURATION,
-            "details": cart_info
+
+    return jsonify(
+        {
+            "success": True,
+            "search_cache": {
+                "entries": len(search_cache),
+                "duration": CACHE_DURATION,
+                "details": search_info,
+            },
+            "auth_cache": {
+                "duration": AUTH_STATUS_CACHE_DURATION,
+                "details": auth_info,
+            },
+            "cart_cache": {"duration": CART_VIEW_CACHE_DURATION, "details": cart_info},
         }
-    })
+    )
+
 
 @app.route("/api/cache/clear", methods=["POST"])
 def clear_cache():
     """Clear all caches"""
     clear_all_caches()
     return jsonify({"success": True, "message": "All caches cleared"})
+
 
 @app.route("/api/cart/add", methods=["POST"])
 def add_to_cart():
@@ -790,7 +827,7 @@ def add_to_cart():
         # Clear cart view cache since cart changed
         if "cart_data" in cart_view_cache:
             del cart_view_cache["cart_data"]
-        
+
         result = {
             "success": True,
             "message": f"Added {quantity} item(s) to cart",
@@ -1142,17 +1179,18 @@ def remove_from_cart():
 def view_cart():
     """View current cart with enhanced product details - with caching"""
     import time
+
     current_time = time.time()
-    
+
     # Check cache first
     if "cart_data" in cart_view_cache:
         cached_result = cart_view_cache["cart_data"]
         if current_time - cached_result["timestamp"] < CART_VIEW_CACHE_DURATION:
             print("Cart view cache hit")
             return jsonify(cached_result["data"])
-    
+
     print("Cart view cache miss - fetching from API")
-    
+
     try:
         # Always fetch fresh data from Kroger API
         all_cart_items = []
@@ -1334,14 +1372,14 @@ def view_cart():
             "count": len(enhanced_cart_items),
             "message": "Enhanced cart view with product details and images",
         }
-        
+
         # Cache the result
         response_data = {"success": True, "data": result}
         cart_view_cache["cart_data"] = {
             "data": response_data,
-            "timestamp": current_time
+            "timestamp": current_time,
         }
-        
+
         return jsonify(response_data)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -1480,7 +1518,7 @@ def sync_cart():
                     {
                         "success": False,
                         "error": f"Failed to fetch from Kroger API: {str(api_error)}",
-                        "note": "Make sure you're authenticated with cart.basic:rw scope",
+                        "note": "Make sure you're authenticated with cart.basic:write scope",
                     }
                 )
 
@@ -1564,7 +1602,10 @@ def clear_local_cart():
             )
         else:
             return jsonify(
-                {"success": False, "error": result.get("error", "Failed to clear local cart tracking")}
+                {
+                    "success": False,
+                    "error": result.get("error", "Failed to clear local cart tracking"),
+                }
             )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -1708,23 +1749,35 @@ def auth_callback():
                     decoded = base64.b64decode(payload)
                     jwt_data = json.loads(decoded)
                     actual_scopes = jwt_data.get("scope", "").split(" ")
-                    has_cart_scope = "cart.basic:rw" in actual_scopes
+                    has_cart_scope = any(
+                        scope in actual_scopes
+                        for scope in ["cart.basic:write", "cart.basic:rw", "cart.basic"]
+                    )
                     print(f"JWT scopes: {actual_scopes}")
                 else:
                     received_scopes = token_info.get("scope", "").split(" ")
-                    has_cart_scope = "cart.basic:rw" in received_scopes
+                    has_cart_scope = any(
+                        scope in received_scopes
+                        for scope in ["cart.basic:write", "cart.basic:rw", "cart.basic"]
+                    )
             else:
                 received_scopes = token_info.get("scope", "").split(" ")
-                has_cart_scope = "cart.basic:rw" in received_scopes
+                has_cart_scope = any(
+                    scope in received_scopes
+                    for scope in ["cart.basic:write", "cart.basic:rw", "cart.basic"]
+                )
         except Exception as e:
             print(f"Error decoding JWT: {e}")
             received_scopes = token_info.get("scope", "").split(" ")
-            has_cart_scope = "cart.basic:rw" in received_scopes
+            has_cart_scope = any(
+                scope in received_scopes
+                for scope in ["cart.basic:write", "cart.basic:rw", "cart.basic"]
+            )
 
         message = "Authentication successful! You can now close this tab and return to the main app."
         if not has_cart_scope:
-            message += " WARNING: The cart.basic:rw scope was not granted, which may limit cart functionality."
-            print("WARNING: cart.basic:rw scope not received!")
+            message += " WARNING: Cart write permissions were not granted, which may limit cart functionality."
+            print("WARNING: No cart write scope received!")
 
         return render_template(
             "auth_result.html",
@@ -1799,13 +1852,13 @@ def start_auth():
         # scopes = "cart.basic:write"
 
         # Option 4: Try with both (original)
-        # scopes = "product.compact cart.basic:rw"
+        # scopes = "product.compact cart.basic:write"
 
         # Option 5: Include profile scope to get user information
-        # Using profile.name to get firstName and lastName
+        # Using profile.compact to get firstName and lastName
         # Adding profile.loyalty to get loyalty card information for purchase history
         # scopes = "cart.basic:write product.compact product.personalized profile.compact profile.full profile.loyalty profile.loyaltyId profile.name urn:com:kroger:kr:purchase:history:read"
-        scopes = "product.compact cart.basic:rw profile.name profile.loyalty"
+        scopes = "product.compact cart.basic:write profile.compact"
 
         print(f"Requesting scopes: {scopes}")
         print(f"Client ID: {client_id}")
@@ -1858,8 +1911,9 @@ def check_auth_completion():
 def auth_status():
     """Check authentication status with caching"""
     import time
+
     current_time = time.time()
-    
+
     # Check cache first
     if "auth_result" in auth_status_cache:
         cached_result = auth_status_cache["auth_result"]
@@ -1871,15 +1925,17 @@ def auth_status():
             print(f"Auth status cache expired (age: {age_seconds:.1f}s)")
     else:
         print("Auth status cache miss - no cached result")
-    
+
     try:
         # Try to get authenticated client to test if auth is working
         client = get_authenticated_client()
         is_valid = client.test_current_token()
-        
+
         print(f"[AUTH_STATUS] Token validation result: {is_valid}")
         if not is_valid:
-            print(f"[AUTH_STATUS] Token validation failed - this may be expected if user is not authenticated")
+            print(
+                f"[AUTH_STATUS] Token validation failed - this may be expected if user is not authenticated"
+            )
         ui_state["auth_status"] = is_valid
 
         # Use the exact same working logic from debug endpoint
@@ -1892,10 +1948,14 @@ def auth_status():
 
         print(f"Token info available: {token_info is not None}")
         if token_info:
-            print(f"Token info keys: {list(token_info.keys()) if token_info else 'None'}")
+            print(
+                f"Token info keys: {list(token_info.keys()) if token_info else 'None'}"
+            )
             try:
                 access_token = token_info.get("access_token", "")
-                print(f"Access token length: {len(access_token) if access_token else 0}")
+                print(
+                    f"Access token length: {len(access_token) if access_token else 0}"
+                )
                 if access_token:
                     import base64
 
@@ -1983,17 +2043,20 @@ def auth_status():
             "token_valid": is_valid,
             "message": f"Authentication token is {'valid' if is_valid else 'not authenticated'}",
             "scopes": scopes,
-            "has_cart_scope": "cart.basic:write" in scopes,
+            "has_cart_scope": any(
+                scope in scopes
+                for scope in ["cart.basic:write", "cart.basic:rw", "cart.basic"]
+            ),
             "user_name": user_name,
         }
-        
+
         # Cache the successful result
         response_data = {"success": True, "data": result}
         auth_status_cache["auth_result"] = {
             "data": response_data,
-            "timestamp": current_time
+            "timestamp": current_time,
         }
-        
+
         return jsonify(response_data)
     except Exception as e:
         ui_state["auth_status"] = False
@@ -2003,14 +2066,16 @@ def auth_status():
             "token_valid": False,
             "error": str(e),
         }
-        
+
         # Cache the error result too (but for shorter duration)
         response_data = {"success": True, "data": result}
         auth_status_cache["auth_result"] = {
             "data": response_data,
-            "timestamp": current_time - AUTH_STATUS_CACHE_DURATION + 30  # Cache errors for only 30 seconds
+            "timestamp": current_time
+            - AUTH_STATUS_CACHE_DURATION
+            + 30,  # Cache errors for only 30 seconds
         }
-        
+
         return jsonify(response_data)  # Still return success=True for the outer wrapper
 
 
@@ -2022,7 +2087,7 @@ def logout():
 
         # Invalidate the client to force re-authentication
         invalidate_authenticated_client()
-        
+
         # Clear auth status cache
         if "auth_result" in auth_status_cache:
             del auth_status_cache["auth_result"]

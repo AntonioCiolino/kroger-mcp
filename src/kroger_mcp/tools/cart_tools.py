@@ -650,7 +650,7 @@ def register_tools(mcp):
         This function uses the Partner API to remove items from your actual Kroger cart.
         This is the recommended way to remove items since it uses the official API.
 
-        Requires authentication with cart.basic:rw scope.
+        Requires authentication with cart.basic:write scope.
 
         Args:
             product_id: The product ID/UPC to remove
@@ -814,7 +814,7 @@ def register_tools(mcp):
         This function uses the Partner API to remove all items from your actual Kroger cart.
         This is the recommended way to clear your cart since it uses the official API.
 
-        Requires authentication with cart.basic:rw scope.
+        Requires authentication with cart.basic:write scope.
 
         Returns:
             Dictionary confirming the cart was cleared
@@ -1097,7 +1097,7 @@ def register_tools(mcp):
                 return {
                     "success": False,
                     "error": f"Cart API access failed: {str(cart_error)}",
-                    "suggestion": "Check authentication and cart.basic:rw scope",
+                    "suggestion": "Check authentication and cart.basic:write scope",
                 }
 
         except Exception as e:
