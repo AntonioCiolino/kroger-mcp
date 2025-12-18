@@ -24,6 +24,7 @@ from .tools import location_tools
 from .tools import product_tools
 from .tools import cart_tools
 from .tools import cart_api_tools
+from .tools import cart_consumer_tools  # Consumer API - works with cart.basic:write scope
 from .tools import info_tools
 from .tools import profile_tools
 from .tools import utility_tools
@@ -53,10 +54,16 @@ def create_server() -> FastMCP:
         Common workflows:
         1. Set a preferred location with set_preferred_location
         2. Search for products with search_products
-        3. Add items to cart with add_items_to_cart
-        4. Use bulk_add_to_cart for multiple items at once
-        5. View current cart with view_current_cart
+        3. Add items to cart with add_to_cart_consumer (RECOMMENDED - works with cart.basic:write)
+        4. Use bulk_add_to_cart_consumer for multiple items at once
+        5. View current cart with view_current_cart (requires special scope)
         6. Mark order as placed with mark_order_placed
+        
+        IMPORTANT - Cart API Types:
+        - Consumer API (add_to_cart_consumer, bulk_add_to_cart_consumer): Works with standard 
+          cart.basic:write scope. USE THESE for most applications.
+        - Partner API (add_items_to_cart, add_item_to_cart): Requires special partner scopes.
+          Will return CART-2216 error if you don't have partner access.
         
         Authentication Flow:
         1. Use start_authentication to get an authorization URL
@@ -76,6 +83,7 @@ def create_server() -> FastMCP:
     product_tools.register_tools(mcp)
     cart_tools.register_tools(mcp)
     cart_api_tools.register_tools(mcp)
+    cart_consumer_tools.register_tools(mcp)  # Consumer API - recommended for most users
     info_tools.register_tools(mcp)
     profile_tools.register_tools(mcp)
     utility_tools.register_tools(mcp)
