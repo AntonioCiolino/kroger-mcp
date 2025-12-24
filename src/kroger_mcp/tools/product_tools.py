@@ -396,6 +396,113 @@ def register_tools(mcp):
             }
 
     @mcp.tool()
+    async def search_products_compact(
+        search_term: str,
+        location_id: Optional[str] = None,
+        limit: int = Field(default=5, ge=1, le=20, description="Number of results to return (1-20)"),
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """
+        Search for products with MINIMAL response data - optimized for cart operations.
+        
+        USE THIS instead of search_products when you need to:
+        - Add items to cart (only need upc)
+        - Compare prices quickly
+        - Get a simple product list
+        
+        Returns ONLY: upc, description, size, price, in_stock for each product.
+        This is ~10x smaller than search_products response.
+        
+        Args:
+            search_term: Product search term (e.g., "milk", "bread", "chicken breast")
+            location_id: Store location ID (uses preferred location if not provided)
+            limit: Number of results to return (1-20, default 5)
+        
+        Returns:
+            Dictionary with compact product data: {upc, description, size, price, in_stock}
+        """
+        # Use preferred location if none provided
+        if not location_id:
+            location_id = get_preferred_location_id()
+            if not location_id:
+                return {
+                    "success": False,
+                    "error": "No location_id provided and no preferred location set. Use set_preferred_location first."
+                }
+        
+        if ctx:
+            await ctx.info(f"Compact search for '{search_term}' at location {location_id}")
+        
+        client = get_client_credentials_client()
+        
+        try:
+            products = client.product.search_products(
+                term=search_term,
+                location_id=location_id,
+                limit=limit
+            )
+            
+            if not products or "data" not in products or not products["data"]:
+                return {
+                    "success": False,
+                    "message": f"No products found matching '{search_term}'",
+                    "data": []
+                }
+            
+            # Format MINIMAL product data - only what's needed for cart operations
+            compact_products = []
+            for product in products["data"]:
+                upc = product.get("upc")
+                if not upc:
+                    continue  # Skip products without UPC
+                
+                # Get price and size from items
+                price = None
+                size = None
+                in_stock = False
+                
+                if "items" in product and product["items"]:
+                    item = product["items"][0]
+                    size = item.get("size")
+                    
+                    # Check inventory
+                    inventory = item.get("inventory", {})
+                    stock_level = inventory.get("stockLevel", "")
+                    in_stock = stock_level.upper() in ["HIGH", "LOW", "MEDIUM"] if stock_level else True
+                    
+                    # Get price (prefer sale price if available)
+                    if "price" in item:
+                        price_data = item["price"]
+                        price = price_data.get("promo") or price_data.get("regular")
+                
+                compact_products.append({
+                    "upc": upc,
+                    "description": product.get("description", ""),
+                    "size": size,
+                    "price": price,
+                    "in_stock": in_stock
+                })
+            
+            if ctx:
+                await ctx.info(f"Found {len(compact_products)} products (compact)")
+            
+            return {
+                "success": True,
+                "search_term": search_term,
+                "count": len(compact_products),
+                "data": compact_products
+            }
+            
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Error in compact search: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "data": []
+            }
+
+    @mcp.tool()
     async def search_products_by_id(
         product_id: str,
         location_id: Optional[str] = None,
