@@ -1,14 +1,32 @@
 """
-Kroger Cart API tools - Direct API implementation following OpenAPI specification
+Kroger Cart Partner API tools - Requires special partner-level scopes.
+
+⚠️ WARNING: These tools require PARTNER-LEVEL API access that most developers don't have.
+If you're getting CART-2216 errors, you don't have partner access.
+
+Use the standard cart tools (add_to_cart, bulk_add_to_cart) instead, which work with
+the standard cart.basic:write scope.
+
+Partner API vs Consumer API:
+- Partner API: POST /v1/carts/{cart_id}/items - Requires partner-level scopes
+- Consumer API: PUT /v1/cart/add - Works with cart.basic:write scope (RECOMMENDED)
+
+These tools are kept for completeness but are DISABLED by default.
+Set KROGER_ENABLE_PARTNER_API=true to enable them.
 """
 
 import json
+import os
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from fastmcp import Context
 from .shared import get_authenticated_client
 import requests
+
+
+# Check if partner API tools should be enabled
+PARTNER_API_ENABLED = os.getenv("KROGER_ENABLE_PARTNER_API", "false").lower() == "true"
 
 
 async def _make_kroger_api_request(
@@ -64,12 +82,55 @@ async def _make_kroger_api_request(
 
 
 def register_tools(mcp):
-    """Register Kroger Cart API tools with the FastMCP server"""
+    """
+    Register Kroger Cart Partner API tools with the FastMCP server.
+    
+    These tools are DISABLED by default because they require partner-level API access.
+    Set KROGER_ENABLE_PARTNER_API=true environment variable to enable them.
+    """
+    
+    if not PARTNER_API_ENABLED:
+        # Register a single informational tool explaining why partner tools are disabled
+        @mcp.tool()
+        async def partner_api_info(ctx: Context = None) -> Dict[str, Any]:
+            """
+            Information about Partner API tools.
+            
+            Partner API tools are DISABLED because they require special partner-level
+            API access that most developers don't have.
+            
+            Use the standard cart tools instead:
+            - add_to_cart: Add a single item to cart
+            - bulk_add_to_cart: Add multiple items to cart
+            
+            To enable Partner API tools (if you have partner access):
+            Set environment variable: KROGER_ENABLE_PARTNER_API=true
+            
+            Returns:
+                Information about Partner API status
+            """
+            return {
+                "partner_api_enabled": False,
+                "message": "Partner API tools are disabled. Use add_to_cart and bulk_add_to_cart instead.",
+                "enable_instructions": "Set KROGER_ENABLE_PARTNER_API=true to enable partner tools",
+                "recommended_tools": [
+                    "add_to_cart - Add single item (Consumer API)",
+                    "bulk_add_to_cart - Add multiple items (Consumer API)",
+                    "view_current_cart - View cart contents",
+                    "remove_from_cart - Remove item from cart",
+                    "clear_cart - Clear all items from cart"
+                ]
+            }
+        return
+
+    # Partner API tools - only registered if KROGER_ENABLE_PARTNER_API=true
 
     @mcp.tool()
-    async def get_user_carts(ctx: Context = None) -> Dict[str, Any]:
+    async def get_user_carts_partner(ctx: Context = None) -> Dict[str, Any]:
         """
-        Get a list of all carts that belong to an authenticated customer.
+        [PARTNER API] Get a list of all carts that belong to an authenticated customer.
+        
+        ⚠️ Requires partner-level API access. Use view_current_cart for standard access.
 
         Implements: GET /v1/carts
 
@@ -78,11 +139,8 @@ def register_tools(mcp):
         """
         try:
             if ctx:
-                await ctx.info("Fetching user's carts from Kroger API")
+                await ctx.info("Fetching user's carts from Kroger Partner API")
 
-            client = get_authenticated_client()
-
-            # Make direct API request
             response = await _make_kroger_api_request(
                 method="GET",
                 endpoint="/v1/carts",
@@ -93,6 +151,7 @@ def register_tools(mcp):
 
             return {
                 "success": True,
+                "api_type": "partner",
                 "data": response,
                 "timestamp": datetime.now().isoformat(),
             }
@@ -108,6 +167,13 @@ def register_tools(mcp):
                     "error": "Authentication failed. Please run force_reauthenticate and try again.",
                     "details": error_message,
                 }
+            elif "CART-2216" in error_message:
+                return {
+                    "success": False,
+                    "error": "Partner API access required. Use standard cart tools instead.",
+                    "details": error_message,
+                    "recommendation": "Use view_current_cart, add_to_cart, bulk_add_to_cart instead"
+                }
             else:
                 return {
                     "success": False,
@@ -115,11 +181,13 @@ def register_tools(mcp):
                 }
 
     @mcp.tool()
-    async def create_cart(
+    async def create_cart_partner(
         items: Optional[List[Dict[str, Any]]] = None, ctx: Context = None
     ) -> Dict[str, Any]:
         """
-        Create a new cart for an authenticated customer.
+        [PARTNER API] Create a new cart for an authenticated customer.
+        
+        ⚠️ Requires partner-level API access.
 
         Implements: POST /v1/carts
 
@@ -136,9 +204,7 @@ def register_tools(mcp):
         """
         try:
             if ctx:
-                await ctx.info("Creating new cart")
-
-            client = get_authenticated_client()
+                await ctx.info("Creating new cart via Partner API")
 
             # Prepare request body
             request_body = {}
@@ -152,19 +218,14 @@ def register_tools(mcp):
                         "allowSubstitutes": item.get("allowSubstitutes", True),
                     }
                     if "specialInstructions" in item:
-                        formatted_item["specialInstructions"] = item[
-                            "specialInstructions"
-                        ]
+                        formatted_item["specialInstructions"] = item["specialInstructions"]
                     formatted_items.append(formatted_item)
                 request_body["items"] = formatted_items
 
-            # Make direct API request
             response = await _make_kroger_api_request(
                 method="POST",
                 endpoint="/v1/carts",
-                headers={
-                    "Content-Type": "application/json",
-                },
+                headers={"Content-Type": "application/json"},
                 data=json.dumps(request_body) if request_body else None,
             )
 
@@ -173,6 +234,7 @@ def register_tools(mcp):
 
             return {
                 "success": True,
+                "api_type": "partner",
                 "data": response,
                 "timestamp": datetime.now().isoformat(),
             }
@@ -182,17 +244,12 @@ def register_tools(mcp):
                 await ctx.error(f"Failed to create cart: {str(e)}")
 
             error_message = str(e)
-            if "401" in error_message or "Unauthorized" in error_message:
+            if "CART-2216" in error_message:
                 return {
                     "success": False,
-                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
+                    "error": "Partner API access required.",
                     "details": error_message,
-                }
-            elif "400" in error_message or "Bad Request" in error_message:
-                return {
-                    "success": False,
-                    "error": "Invalid request. Please check the cart data and try again.",
-                    "details": error_message,
+                    "recommendation": "Use add_to_cart or bulk_add_to_cart instead"
                 }
             else:
                 return {
@@ -201,9 +258,11 @@ def register_tools(mcp):
                 }
 
     @mcp.tool()
-    async def get_cart_by_id(cart_id: str, ctx: Context = None) -> Dict[str, Any]:
+    async def get_cart_by_id_partner(cart_id: str, ctx: Context = None) -> Dict[str, Any]:
         """
-        Get a specific cart by ID for an authenticated customer.
+        [PARTNER API] Get a specific cart by ID for an authenticated customer.
+        
+        ⚠️ Requires partner-level API access.
 
         Implements: GET /v1/carts/{id}
 
@@ -215,11 +274,8 @@ def register_tools(mcp):
         """
         try:
             if ctx:
-                await ctx.info(f"Fetching cart with ID: {cart_id}")
+                await ctx.info(f"Fetching cart {cart_id} via Partner API")
 
-            client = get_authenticated_client()
-
-            # Make direct API request
             response = await _make_kroger_api_request(
                 method="GET",
                 endpoint=f"/v1/carts/{cart_id}",
@@ -230,6 +286,7 @@ def register_tools(mcp):
 
             return {
                 "success": True,
+                "api_type": "partner",
                 "data": response,
                 "cart_id": cart_id,
                 "timestamp": datetime.now().isoformat(),
@@ -240,121 +297,14 @@ def register_tools(mcp):
                 await ctx.error(f"Failed to get cart: {str(e)}")
 
             error_message = str(e)
-            if "401" in error_message or "Unauthorized" in error_message:
-                return {
-                    "success": False,
-                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
-                    "details": error_message,
-                }
-            elif "404" in error_message or "Not Found" in error_message:
-                return {
-                    "success": False,
-                    "error": f"Cart with ID {cart_id} not found.",
-                    "details": error_message,
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to get cart: {error_message}",
-                    "cart_id": cart_id,
-                }
-
-    @mcp.tool()
-    async def update_cart(
-        cart_id: str, items: List[Dict[str, Any]], ctx: Context = None
-    ) -> Dict[str, Any]:
-        """
-        Update an authenticated customer's cart by ID.
-        This operation only updates items that are already in the cart.
-
-        Implements: PUT /v1/carts/{id}
-
-        Args:
-            cart_id: The ID of the cart to update
-            items: List of items to update. Each item should have:
-                   - upc: The product UPC (required)
-                   - quantity: New quantity (required)
-                   - modality: PICKUP or DELIVERY (default: PICKUP)
-                   - allowSubstitutes: Allow substitutes (default: true)
-                   - description: Item description (optional)
-
-        Returns:
-            Dictionary containing the updated cart information
-        """
-        try:
-            if ctx:
-                await ctx.info(f"Updating cart with ID: {cart_id}")
-
-            client = get_authenticated_client()
-
-            # Prepare request body
-            formatted_items = []
-            for item in items:
-                formatted_item = {
-                    "upc": item["upc"],
-                    "quantity": item["quantity"],
-                    "modality": item.get("modality", "PICKUP"),
-                    "allowSubstitutes": item.get("allowSubstitutes", True),
-                }
-                if "description" in item:
-                    formatted_item["description"] = item["description"]
-                formatted_items.append(formatted_item)
-
-            request_body = {"items": formatted_items}
-
-            # Make direct API request
-            response = await _make_kroger_api_request(
-                method="PUT",
-                endpoint=f"/v1/carts/{cart_id}",
-                headers={
-                    "Content-Type": "application/json",
-                },
-                data=json.dumps(request_body),
-            )
-
-            if ctx:
-                await ctx.info("Successfully updated cart")
-
             return {
-                "success": True,
-                "data": response,
+                "success": False,
+                "error": f"Failed to get cart: {error_message}",
                 "cart_id": cart_id,
-                "items_updated": len(items),
-                "timestamp": datetime.now().isoformat(),
             }
 
-        except Exception as e:
-            if ctx:
-                await ctx.error(f"Failed to update cart: {str(e)}")
-
-            error_message = str(e)
-            if "401" in error_message or "Unauthorized" in error_message:
-                return {
-                    "success": False,
-                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
-                    "details": error_message,
-                }
-            elif "404" in error_message or "Not Found" in error_message:
-                return {
-                    "success": False,
-                    "error": f"Cart with ID {cart_id} not found.",
-                    "details": error_message,
-                }
-            elif "400" in error_message or "Bad Request" in error_message:
-                return {
-                    "success": False,
-                    "error": "Invalid request. Please check the cart data and try again.",
-                    "details": error_message,
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to update cart: {error_message}",
-                    "cart_id": cart_id,
-                }
-
     @mcp.tool()
-    async def add_item_to_cart(
+    async def add_item_to_cart_partner(
         cart_id: str,
         upc: str,
         quantity: int = 1,
@@ -364,7 +314,9 @@ def register_tools(mcp):
         ctx: Context = None,
     ) -> Dict[str, Any]:
         """
-        Add an item to an authenticated customer's cart.
+        [PARTNER API] Add an item to an authenticated customer's cart.
+        
+        ⚠️ Requires partner-level API access. Use add_to_cart instead for standard access.
 
         Implements: POST /v1/carts/{id}/items
 
@@ -381,11 +333,8 @@ def register_tools(mcp):
         """
         try:
             if ctx:
-                await ctx.info(f"Adding item {upc} to cart {cart_id}")
+                await ctx.info(f"Adding item {upc} to cart {cart_id} via Partner API")
 
-            client = get_authenticated_client()
-
-            # Prepare request body
             request_body = {
                 "upc": upc,
                 "quantity": quantity,
@@ -395,13 +344,10 @@ def register_tools(mcp):
             if special_instructions:
                 request_body["specialInstructions"] = special_instructions
 
-            # Make direct API request
             response = await _make_kroger_api_request(
                 method="POST",
                 endpoint=f"/v1/carts/{cart_id}/items",
-                headers={
-                    "Content-Type": "application/json",
-                },
+                headers={"Content-Type": "application/json"},
                 data=json.dumps(request_body),
             )
 
@@ -410,6 +356,7 @@ def register_tools(mcp):
 
             return {
                 "success": True,
+                "api_type": "partner",
                 "data": response,
                 "cart_id": cart_id,
                 "upc": upc,
@@ -423,23 +370,12 @@ def register_tools(mcp):
                 await ctx.error(f"Failed to add item to cart: {str(e)}")
 
             error_message = str(e)
-            if "401" in error_message or "Unauthorized" in error_message:
+            if "CART-2216" in error_message:
                 return {
                     "success": False,
-                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
+                    "error": "Partner API access required.",
                     "details": error_message,
-                }
-            elif "404" in error_message or "Not Found" in error_message:
-                return {
-                    "success": False,
-                    "error": f"Cart with ID {cart_id} not found.",
-                    "details": error_message,
-                }
-            elif "400" in error_message or "Bad Request" in error_message:
-                return {
-                    "success": False,
-                    "error": "Invalid request. Please check the item data and try again.",
-                    "details": error_message,
+                    "recommendation": "Use add_to_cart instead"
                 }
             else:
                 return {
@@ -450,11 +386,13 @@ def register_tools(mcp):
                 }
 
     @mcp.tool()
-    async def update_cart_item_quantity(
+    async def update_cart_item_quantity_partner(
         cart_id: str, upc: str, quantity: int, ctx: Context = None
     ) -> Dict[str, Any]:
         """
-        Update the quantity of an item in an authenticated customer's cart.
+        [PARTNER API] Update the quantity of an item in an authenticated customer's cart.
+        
+        ⚠️ Requires partner-level API access.
 
         Implements: PUT /v1/carts/{id}/items/{upc}
 
@@ -468,29 +406,20 @@ def register_tools(mcp):
         """
         try:
             if ctx:
-                await ctx.info(
-                    f"Updating quantity of item {upc} in cart {cart_id} to {quantity}"
-                )
+                await ctx.info(f"Updating item {upc} quantity to {quantity} via Partner API")
 
-            # Validate UPC length
             if len(upc) != 13:
                 return {
                     "success": False,
-                    "error": f"UPC must be exactly 13 characters long. Provided UPC '{upc}' has {len(upc)} characters.",
+                    "error": f"UPC must be exactly 13 characters. Got {len(upc)}.",
                 }
 
-            client = get_authenticated_client()
-
-            # Prepare request body
             request_body = {"quantity": quantity}
 
-            # Make direct API request
             response = await _make_kroger_api_request(
                 method="PUT",
                 endpoint=f"/v1/carts/{cart_id}/items/{upc}",
-                headers={
-                    "Content-Type": "application/json",
-                },
+                headers={"Content-Type": "application/json"},
                 data=json.dumps(request_body),
             )
 
@@ -499,7 +428,8 @@ def register_tools(mcp):
 
             return {
                 "success": True,
-                "message": f"Successfully updated quantity of item {upc} to {quantity}",
+                "api_type": "partner",
+                "message": f"Updated quantity of {upc} to {quantity}",
                 "cart_id": cart_id,
                 "upc": upc,
                 "quantity": quantity,
@@ -510,39 +440,21 @@ def register_tools(mcp):
             if ctx:
                 await ctx.error(f"Failed to update item quantity: {str(e)}")
 
-            error_message = str(e)
-            if "401" in error_message or "Unauthorized" in error_message:
-                return {
-                    "success": False,
-                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
-                    "details": error_message,
-                }
-            elif "404" in error_message or "Not Found" in error_message:
-                return {
-                    "success": False,
-                    "error": f"Cart with ID {cart_id} or item with UPC {upc} not found.",
-                    "details": error_message,
-                }
-            elif "400" in error_message or "Bad Request" in error_message:
-                return {
-                    "success": False,
-                    "error": "Invalid request. Please check the cart ID, UPC, and quantity.",
-                    "details": error_message,
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to update item quantity: {error_message}",
-                    "cart_id": cart_id,
-                    "upc": upc,
-                }
+            return {
+                "success": False,
+                "error": f"Failed to update item quantity: {str(e)}",
+                "cart_id": cart_id,
+                "upc": upc,
+            }
 
     @mcp.tool()
-    async def delete_cart_item(
+    async def delete_cart_item_partner(
         cart_id: str, upc: str, ctx: Context = None
     ) -> Dict[str, Any]:
         """
-        Delete an item from an authenticated customer's cart.
+        [PARTNER API] Delete an item from an authenticated customer's cart.
+        
+        ⚠️ Requires partner-level API access. Use remove_from_cart instead for standard access.
 
         Implements: DELETE /v1/carts/{id}/items/{upc}
 
@@ -555,18 +467,14 @@ def register_tools(mcp):
         """
         try:
             if ctx:
-                await ctx.info(f"Deleting item {upc} from cart {cart_id}")
+                await ctx.info(f"Deleting item {upc} from cart {cart_id} via Partner API")
 
-            # Validate UPC length
             if len(upc) != 13:
                 return {
                     "success": False,
-                    "error": f"UPC must be exactly 13 characters long. Provided UPC '{upc}' has {len(upc)} characters.",
+                    "error": f"UPC must be exactly 13 characters. Got {len(upc)}.",
                 }
 
-            client = get_authenticated_client()
-
-            # Make direct API request
             response = await _make_kroger_api_request(
                 method="DELETE",
                 endpoint=f"/v1/carts/{cart_id}/items/{upc}",
@@ -577,7 +485,8 @@ def register_tools(mcp):
 
             return {
                 "success": True,
-                "message": f"Successfully deleted item {upc} from cart",
+                "api_type": "partner",
+                "message": f"Deleted item {upc} from cart",
                 "cart_id": cart_id,
                 "upc": upc,
                 "timestamp": datetime.now().isoformat(),
@@ -587,29 +496,9 @@ def register_tools(mcp):
             if ctx:
                 await ctx.error(f"Failed to delete item from cart: {str(e)}")
 
-            error_message = str(e)
-            if "401" in error_message or "Unauthorized" in error_message:
-                return {
-                    "success": False,
-                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
-                    "details": error_message,
-                }
-            elif "404" in error_message or "Not Found" in error_message:
-                return {
-                    "success": False,
-                    "error": f"Cart with ID {cart_id} or item with UPC {upc} not found.",
-                    "details": error_message,
-                }
-            elif "400" in error_message or "Bad Request" in error_message:
-                return {
-                    "success": False,
-                    "error": "Invalid request. Please check the cart ID and UPC.",
-                    "details": error_message,
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to delete item from cart: {error_message}",
-                    "cart_id": cart_id,
-                    "upc": upc,
-                }
+            return {
+                "success": False,
+                "error": f"Failed to delete item from cart: {str(e)}",
+                "cart_id": cart_id,
+                "upc": upc,
+            }

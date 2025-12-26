@@ -23,8 +23,8 @@ from fastmcp import FastMCP
 from .tools import location_tools
 from .tools import product_tools
 from .tools import cart_tools
-from .tools import cart_api_tools
-from .tools import cart_consumer_tools  # Consumer API - works with cart.basic:write scope
+from .tools import cart_consumer_tools  # Standard cart tools (Consumer API)
+from .tools import cart_partner_tools   # Partner API tools (disabled by default)
 from .tools import info_tools
 from .tools import profile_tools
 from .tools import utility_tools
@@ -46,7 +46,7 @@ def create_server() -> FastMCP:
         Key Features:
         - Search and manage store locations
         - Find and search products
-        - Add items to shopping cart with local tracking
+        - Add items to shopping cart
         - Access chain and department information
         - User profile management
         - Purchase history and receipt details (requires loyalty scope)
@@ -54,16 +54,21 @@ def create_server() -> FastMCP:
         Common workflows:
         1. Set a preferred location with set_preferred_location
         2. Search for products with search_products
-        3. Add items to cart with add_to_cart_consumer (RECOMMENDED - works with cart.basic:write)
-        4. Use bulk_add_to_cart_consumer for multiple items at once
-        5. View current cart with view_current_cart (requires special scope)
+        3. Add items to cart with add_to_cart
+        4. Use bulk_add_to_cart for multiple items at once
+        5. View current cart with view_current_cart
         6. Mark order as placed with mark_order_placed
         
-        IMPORTANT - Cart API Types:
-        - Consumer API (add_to_cart_consumer, bulk_add_to_cart_consumer): Works with standard 
-          cart.basic:write scope. USE THESE for most applications.
-        - Partner API (add_items_to_cart, add_item_to_cart): Requires special partner scopes.
-          Will return CART-2216 error if you don't have partner access.
+        Cart Tools:
+        - add_to_cart: Add a single item to cart
+        - bulk_add_to_cart: Add multiple items at once
+        - view_current_cart: View cart contents
+        - remove_from_cart: Remove item from cart
+        - clear_cart: Clear all items from cart
+        
+        Partner API (disabled by default):
+        Some tools require special partner-level API access. These are disabled by default.
+        Set KROGER_ENABLE_PARTNER_API=true to enable them if you have partner access.
         
         Authentication Flow:
         1. Use start_authentication to get an authorization URL
@@ -82,8 +87,8 @@ def create_server() -> FastMCP:
     location_tools.register_tools(mcp)
     product_tools.register_tools(mcp)
     cart_tools.register_tools(mcp)
-    cart_api_tools.register_tools(mcp)
-    cart_consumer_tools.register_tools(mcp)  # Consumer API - recommended for most users
+    cart_consumer_tools.register_tools(mcp)  # Standard cart tools (add_to_cart, bulk_add_to_cart)
+    cart_partner_tools.register_tools(mcp)   # Partner API tools (disabled by default)
     info_tools.register_tools(mcp)
     profile_tools.register_tools(mcp)
     utility_tools.register_tools(mcp)

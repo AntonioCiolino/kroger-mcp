@@ -205,7 +205,7 @@ The web interface provides a user-friendly way to test all Kroger MCP functional
 
 | Tool | Description | Auth Required |
 |------|-------------|---------------|
-| `add_items_to_cart` | Add a single item to cart | Yes |
+| `add_to_cart` | Add a single item to cart | Yes |
 | `bulk_add_to_cart` | Add multiple items to cart in one operation | Yes |
 | `view_current_cart` | View items currently in your local cart tracking | No |
 | `remove_from_cart` | Remove items from actual Kroger cart and local tracking | Yes |
@@ -214,6 +214,20 @@ The web interface provides a user-friendly way to test all Kroger MCP functional
 | `clear_local_cart_tracking` | Clear all items from local cart tracking only | No |
 | `mark_order_placed` | Move current cart to order history | No |
 | `view_order_history` | View history of placed orders | No |
+
+#### Partner API Tools (Disabled by Default)
+
+These tools require special partner-level API access. Most developers don't have this access.
+Set `KROGER_ENABLE_PARTNER_API=true` to enable them if you have partner credentials.
+
+| Tool | Description | Auth Required |
+|------|-------------|---------------|
+| `get_user_carts_partner` | Get all carts (Partner API) | Yes + Partner |
+| `create_cart_partner` | Create a new cart (Partner API) | Yes + Partner |
+| `get_cart_by_id_partner` | Get cart by ID (Partner API) | Yes + Partner |
+| `add_item_to_cart_partner` | Add item to specific cart (Partner API) | Yes + Partner |
+| `update_cart_item_quantity_partner` | Update item quantity (Partner API) | Yes + Partner |
+| `delete_cart_item_partner` | Delete item from cart (Partner API) | Yes + Partner |
 
 #### Information Tools
 

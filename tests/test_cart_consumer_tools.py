@@ -1,7 +1,7 @@
 """
-Tests for Kroger Cart Consumer API tools.
+Tests for Kroger Cart tools.
 
-These tests verify the Consumer API cart tools work correctly with the cart.basic:write scope.
+These tests verify the standard cart tools work correctly with the cart.basic:write scope.
 """
 
 import pytest
@@ -10,18 +10,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
 
 
-class TestAddToCartConsumer:
-    """Tests for add_to_cart_consumer tool"""
+class TestAddToCart:
+    """Tests for add_to_cart tool"""
 
     @pytest.mark.asyncio
     async def test_add_single_item_success(self):
-        """Test adding a single item to cart via Consumer API"""
+        """Test adding a single item to cart"""
         from src.kroger_mcp.tools import cart_consumer_tools
         
         # Mock the API request function
         with patch.object(
             cart_consumer_tools, 
-            '_make_kroger_consumer_api_request',
+            '_make_kroger_api_request',
             new_callable=AsyncMock
         ) as mock_request:
             mock_request.return_value = {"success": True, "status_code": 204}
@@ -40,7 +40,7 @@ class TestAddToCartConsumer:
             cart_consumer_tools.register_tools(mock_mcp)
             
             # Call the tool
-            result = await tools['add_to_cart_consumer'](
+            result = await tools['add_to_cart'](
                 upc="0078142152306",
                 quantity=2,
                 modality="PICKUP"
@@ -50,8 +50,6 @@ class TestAddToCartConsumer:
             assert result["upc"] == "0078142152306"
             assert result["quantity"] == 2
             assert result["modality"] == "PICKUP"
-            assert result["api_type"] == "consumer"
-            assert result["endpoint"] == "PUT /v1/cart/add"
             
             # Verify the API was called correctly
             mock_request.assert_called_once()
@@ -72,7 +70,7 @@ class TestAddToCartConsumer:
         
         with patch.object(
             cart_consumer_tools,
-            '_make_kroger_consumer_api_request',
+            '_make_kroger_api_request',
             new_callable=AsyncMock
         ) as mock_request:
             mock_request.side_effect = Exception("401 Unauthorized")
@@ -89,7 +87,7 @@ class TestAddToCartConsumer:
             mock_mcp.tool = capture_tool
             cart_consumer_tools.register_tools(mock_mcp)
             
-            result = await tools['add_to_cart_consumer'](
+            result = await tools['add_to_cart'](
                 upc="0078142152306",
                 quantity=1,
                 modality="PICKUP"
@@ -105,7 +103,7 @@ class TestAddToCartConsumer:
         
         with patch.object(
             cart_consumer_tools,
-            '_make_kroger_consumer_api_request',
+            '_make_kroger_api_request',
             new_callable=AsyncMock
         ) as mock_request:
             mock_request.side_effect = Exception("400 Bad Request: Invalid UPC")
@@ -122,7 +120,7 @@ class TestAddToCartConsumer:
             mock_mcp.tool = capture_tool
             cart_consumer_tools.register_tools(mock_mcp)
             
-            result = await tools['add_to_cart_consumer'](
+            result = await tools['add_to_cart'](
                 upc="invalid",
                 quantity=1,
                 modality="PICKUP"
@@ -132,17 +130,17 @@ class TestAddToCartConsumer:
             assert "Invalid request" in result["error"]
 
 
-class TestBulkAddToCartConsumer:
-    """Tests for bulk_add_to_cart_consumer tool"""
+class TestBulkAddToCart:
+    """Tests for bulk_add_to_cart tool"""
 
     @pytest.mark.asyncio
     async def test_bulk_add_success(self):
-        """Test adding multiple items to cart via Consumer API"""
+        """Test adding multiple items to cart"""
         from src.kroger_mcp.tools import cart_consumer_tools
         
         with patch.object(
             cart_consumer_tools,
-            '_make_kroger_consumer_api_request',
+            '_make_kroger_api_request',
             new_callable=AsyncMock
         ) as mock_request:
             mock_request.return_value = {"success": True, "status_code": 204}
@@ -164,12 +162,10 @@ class TestBulkAddToCartConsumer:
                 {"upc": "0001111040101", "quantity": 1, "modality": "PICKUP"},
             ]
             
-            result = await tools['bulk_add_to_cart_consumer'](items=items)
+            result = await tools['bulk_add_to_cart'](items=items)
             
             assert result["success"] is True
             assert result["items_added"] == 2
-            assert result["api_type"] == "consumer"
-            assert result["endpoint"] == "PUT /v1/cart/add"
             
             # Verify the API was called with all items
             call_args = mock_request.call_args
@@ -183,7 +179,7 @@ class TestBulkAddToCartConsumer:
         
         with patch.object(
             cart_consumer_tools,
-            '_make_kroger_consumer_api_request',
+            '_make_kroger_api_request',
             new_callable=AsyncMock
         ) as mock_request:
             mock_request.return_value = {"success": True, "status_code": 204}
@@ -205,7 +201,7 @@ class TestBulkAddToCartConsumer:
                 {"product_id": "0078142152306", "quantity": 1},
             ]
             
-            result = await tools['bulk_add_to_cart_consumer'](items=items)
+            result = await tools['bulk_add_to_cart'](items=items)
             
             assert result["success"] is True
             
@@ -221,7 +217,7 @@ class TestBulkAddToCartConsumer:
         
         with patch.object(
             cart_consumer_tools,
-            '_make_kroger_consumer_api_request',
+            '_make_kroger_api_request',
             new_callable=AsyncMock
         ) as mock_request:
             mock_request.return_value = {"success": True, "status_code": 204}
@@ -241,7 +237,7 @@ class TestBulkAddToCartConsumer:
             # Minimal item - only UPC
             items = [{"upc": "0078142152306"}]
             
-            result = await tools['bulk_add_to_cart_consumer'](items=items)
+            result = await tools['bulk_add_to_cart'](items=items)
             
             assert result["success"] is True
             
@@ -252,8 +248,78 @@ class TestBulkAddToCartConsumer:
             assert request_body["items"][0]["modality"] == "PICKUP"
 
 
-class TestConsumerApiRequest:
-    """Tests for the _make_kroger_consumer_api_request helper"""
+class TestBackwardCompatibilityAliases:
+    """Tests for backward compatibility aliases (deprecated _consumer suffix)"""
+
+    @pytest.mark.asyncio
+    async def test_add_to_cart_consumer_alias_works(self):
+        """Test that add_to_cart_consumer still works as an alias"""
+        from src.kroger_mcp.tools import cart_consumer_tools
+        
+        with patch.object(
+            cart_consumer_tools,
+            '_make_kroger_api_request',
+            new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = {"success": True, "status_code": 204}
+            
+            mock_mcp = MagicMock()
+            tools = {}
+            
+            def capture_tool():
+                def decorator(func):
+                    tools[func.__name__] = func
+                    return func
+                return decorator
+            
+            mock_mcp.tool = capture_tool
+            cart_consumer_tools.register_tools(mock_mcp)
+            
+            # Use the deprecated alias
+            result = await tools['add_to_cart_consumer'](
+                upc="0078142152306",
+                quantity=1,
+                modality="PICKUP"
+            )
+            
+            assert result["success"] is True
+            assert result["upc"] == "0078142152306"
+
+    @pytest.mark.asyncio
+    async def test_bulk_add_to_cart_consumer_alias_works(self):
+        """Test that bulk_add_to_cart_consumer still works as an alias"""
+        from src.kroger_mcp.tools import cart_consumer_tools
+        
+        with patch.object(
+            cart_consumer_tools,
+            '_make_kroger_api_request',
+            new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = {"success": True, "status_code": 204}
+            
+            mock_mcp = MagicMock()
+            tools = {}
+            
+            def capture_tool():
+                def decorator(func):
+                    tools[func.__name__] = func
+                    return func
+                return decorator
+            
+            mock_mcp.tool = capture_tool
+            cart_consumer_tools.register_tools(mock_mcp)
+            
+            items = [{"upc": "0078142152306", "quantity": 1}]
+            
+            # Use the deprecated alias
+            result = await tools['bulk_add_to_cart_consumer'](items=items)
+            
+            assert result["success"] is True
+            assert result["items_added"] == 1
+
+
+class TestApiRequest:
+    """Tests for the _make_kroger_api_request helper"""
 
     @pytest.mark.asyncio
     async def test_handles_204_no_content(self):
@@ -269,7 +335,7 @@ class TestConsumerApiRequest:
         
         with patch.object(cart_consumer_tools, 'get_authenticated_client', return_value=mock_client):
             with patch.object(cart_consumer_tools.requests, 'put', return_value=mock_response):
-                result = await cart_consumer_tools._make_kroger_consumer_api_request(
+                result = await cart_consumer_tools._make_kroger_api_request(
                     method="PUT",
                     endpoint="/v1/cart/add",
                     data='{"items": []}'
@@ -293,7 +359,7 @@ class TestConsumerApiRequest:
         with patch.object(cart_consumer_tools, 'get_authenticated_client', return_value=mock_client):
             with patch.object(cart_consumer_tools.requests, 'put', return_value=mock_response):
                 with pytest.raises(Exception) as exc_info:
-                    await cart_consumer_tools._make_kroger_consumer_api_request(
+                    await cart_consumer_tools._make_kroger_api_request(
                         method="PUT",
                         endpoint="/v1/cart/add",
                         data='{"items": []}'

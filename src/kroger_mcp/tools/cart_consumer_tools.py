@@ -1,34 +1,32 @@
 """
-Kroger Cart Consumer API tools - Uses the Consumer API endpoints that work with cart.basic:write scope.
+Kroger Cart tools - Standard Consumer API implementation.
 
-IMPORTANT: This file uses the CONSUMER API endpoints:
-- PUT /v1/cart/add - Add items to cart (works with cart.basic:write)
+These are the PRIMARY cart tools that work with the standard cart.basic:write OAuth scope.
+Use these tools for all cart operations.
 
-The Partner API endpoints (in cart_tools.py and cart_api_tools.py) require special partner scopes
-that most developers don't have access to. Use these Consumer API tools instead.
+API Endpoint: PUT /v1/cart/add
 
-Consumer API vs Partner API:
-- Consumer API: PUT /v1/cart/add - Works with cart.basic:write scope
-- Partner API: POST /v1/carts/{cart_id}/items - Requires partner-level scopes (CART-2216 error if missing)
+For Partner API tools (requires special partner-level access), see cart_partner_tools.py.
+Partner tools are DISABLED by default - set KROGER_ENABLE_PARTNER_API=true to enable them.
 """
 
 import json
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 from fastmcp import Context
 from .shared import get_authenticated_client
 import requests
 
 
-async def _make_kroger_consumer_api_request(
+async def _make_kroger_api_request(
     method: str, endpoint: str, headers: Dict[str, str] = None, data: str = None
 ) -> Dict[str, Any]:
     """
-    Make a direct HTTP request to the Kroger Consumer API.
+    Make a direct HTTP request to the Kroger API.
     
-    This uses the Consumer API endpoints which work with standard OAuth scopes
-    like cart.basic:write, unlike the Partner API which requires special scopes.
+    Uses the standard Consumer API endpoints which work with standard OAuth scopes
+    like cart.basic:write.
     """
     try:
         client = get_authenticated_client()
@@ -78,27 +76,24 @@ async def _make_kroger_consumer_api_request(
             return {"success": True, "status_code": response.status_code}
 
     except Exception as e:
-        raise Exception(f"Kroger Consumer API request failed: {str(e)}")
+        raise Exception(f"Kroger API request failed: {str(e)}")
 
 
 def register_tools(mcp):
-    """Register Kroger Cart Consumer API tools with the FastMCP server"""
+    """Register standard Kroger Cart tools with the FastMCP server"""
 
     @mcp.tool()
-    async def add_to_cart_consumer(
+    async def add_to_cart(
         upc: str,
         quantity: int = 1,
         modality: str = "PICKUP",
         ctx: Context = None,
     ) -> Dict[str, Any]:
         """
-        Add an item to the user's Kroger cart using the Consumer API.
+        Add an item to the user's Kroger cart.
         
-        THIS IS THE RECOMMENDED METHOD for adding items to cart. It uses the Consumer API
-        endpoint (PUT /v1/cart/add) which works with the standard cart.basic:write scope.
-        
-        The Partner API tools (add_items_to_cart, add_item_to_cart) require special partner
-        scopes that most developers don't have access to.
+        This is the standard method for adding items to cart. Works with the
+        cart.basic:write OAuth scope.
 
         Args:
             upc: The product UPC to add to cart (e.g., "0078142152306")
@@ -111,10 +106,10 @@ def register_tools(mcp):
         try:
             if ctx:
                 await ctx.info(
-                    f"Adding {quantity}x {upc} to cart via Consumer API with {modality} modality"
+                    f"Adding {quantity}x {upc} to cart with {modality} modality"
                 )
 
-            # Prepare the request body for Consumer API
+            # Prepare the request body
             request_body = {
                 "items": [
                     {
@@ -128,8 +123,7 @@ def register_tools(mcp):
             if ctx:
                 await ctx.info(f"Request body: {json.dumps(request_body)}")
 
-            # Use Consumer API endpoint
-            response = await _make_kroger_consumer_api_request(
+            response = await _make_kroger_api_request(
                 method="PUT",
                 endpoint="/v1/cart/add",
                 headers={
@@ -139,7 +133,7 @@ def register_tools(mcp):
             )
 
             if ctx:
-                await ctx.info("Successfully added item to Kroger cart via Consumer API")
+                await ctx.info("Successfully added item to Kroger cart")
 
             return {
                 "success": True,
@@ -147,8 +141,6 @@ def register_tools(mcp):
                 "upc": upc,
                 "quantity": quantity,
                 "modality": modality,
-                "api_type": "consumer",
-                "endpoint": "PUT /v1/cart/add",
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -179,30 +171,66 @@ def register_tools(mcp):
                 }
 
     @mcp.tool()
-    async def bulk_add_to_cart_consumer(
-        items: List[Dict[str, Any]], 
+    async def bulk_add_to_cart(
+        items: Union[List[Dict[str, Any]], str], 
         ctx: Context = None
     ) -> Dict[str, Any]:
         """
-        Add multiple items to the user's Kroger cart using the Consumer API.
+        Add multiple items to the user's Kroger cart.
         
-        THIS IS THE RECOMMENDED METHOD for bulk adding items. It uses the Consumer API
-        endpoint (PUT /v1/cart/add) which works with the standard cart.basic:write scope.
+        This is the standard method for bulk adding items. Works with the
+        cart.basic:write OAuth scope.
 
         Args:
             items: List of items to add. Each item should have:
                    - upc: The product UPC (required)
                    - quantity: Quantity to add (default: 1)
                    - modality: PICKUP or DELIVERY (default: PICKUP)
+                   
+                   Can also accept a JSON string containing {"items": [...], "unavailable": [...]}
+                   which will be parsed automatically (common when called from LLM-generated plans).
 
         Returns:
             Dictionary with results for the bulk add operation
         """
         try:
+            # Handle case where items is passed as a JSON string (common from LLM plans)
+            if isinstance(items, str):
+                if ctx:
+                    await ctx.info("Received items as JSON string, parsing...")
+                try:
+                    parsed = json.loads(items)
+                    # Handle {"items": [...], "unavailable": [...]} format from LLM
+                    if isinstance(parsed, dict) and "items" in parsed:
+                        items = parsed["items"]
+                        if ctx and parsed.get("unavailable"):
+                            await ctx.info(f"Note: {len(parsed['unavailable'])} items marked unavailable by LLM")
+                    elif isinstance(parsed, list):
+                        items = parsed
+                    else:
+                        return {
+                            "success": False,
+                            "error": "Invalid items format. Expected list or {items: [...]}",
+                            "received_type": type(parsed).__name__
+                        }
+                except json.JSONDecodeError as e:
+                    return {
+                        "success": False,
+                        "error": f"Failed to parse items JSON string: {str(e)}",
+                        "items_preview": items[:200] if len(items) > 200 else items
+                    }
+            
+            if not items or len(items) == 0:
+                return {
+                    "success": False,
+                    "error": "No items to add to cart",
+                    "items_count": 0
+                }
+            
             if ctx:
-                await ctx.info(f"Adding {len(items)} items to cart via Consumer API")
+                await ctx.info(f"Adding {len(items)} items to cart")
 
-            # Format items for Consumer API
+            # Format items
             formatted_items = []
             for item in items:
                 formatted_items.append({
@@ -216,8 +244,7 @@ def register_tools(mcp):
             if ctx:
                 await ctx.info(f"Request body: {json.dumps(request_body)}")
 
-            # Use Consumer API endpoint - single call for all items
-            response = await _make_kroger_consumer_api_request(
+            response = await _make_kroger_api_request(
                 method="PUT",
                 endpoint="/v1/cart/add",
                 headers={
@@ -227,15 +254,13 @@ def register_tools(mcp):
             )
 
             if ctx:
-                await ctx.info(f"Successfully added {len(items)} items to cart via Consumer API")
+                await ctx.info(f"Successfully added {len(items)} items to cart")
 
             return {
                 "success": True,
                 "message": f"Successfully added {len(items)} items to cart",
                 "items_added": len(items),
                 "items": formatted_items,
-                "api_type": "consumer",
-                "endpoint": "PUT /v1/cart/add",
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -256,3 +281,36 @@ def register_tools(mcp):
                     "error": f"Failed to add items to cart: {error_message}",
                     "items_attempted": len(items),
                 }
+    
+    # Keep backward compatibility aliases
+    @mcp.tool()
+    async def add_to_cart_consumer(
+        upc: str,
+        quantity: int = 1,
+        modality: str = "PICKUP",
+        ctx: Context = None,
+    ) -> Dict[str, Any]:
+        """
+        [DEPRECATED] Use add_to_cart instead.
+        
+        This is an alias for backward compatibility. The _consumer suffix is no longer
+        needed since the Consumer API is now the default.
+        """
+        if ctx:
+            await ctx.warning("add_to_cart_consumer is deprecated. Use add_to_cart instead.")
+        return await add_to_cart(upc=upc, quantity=quantity, modality=modality, ctx=ctx)
+
+    @mcp.tool()
+    async def bulk_add_to_cart_consumer(
+        items: List[Dict[str, Any]], 
+        ctx: Context = None
+    ) -> Dict[str, Any]:
+        """
+        [DEPRECATED] Use bulk_add_to_cart instead.
+        
+        This is an alias for backward compatibility. The _consumer suffix is no longer
+        needed since the Consumer API is now the default.
+        """
+        if ctx:
+            await ctx.warning("bulk_add_to_cart_consumer is deprecated. Use bulk_add_to_cart instead.")
+        return await bulk_add_to_cart(items=items, ctx=ctx)
