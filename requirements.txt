@@ -1,5 +1,5 @@
-# FastMCP framework
-fastmcp
+# FastMCP framework (2.14.3+ required for output_schema support)
+fastmcp>=2.14.3
 
 # Kroger API client
 kroger-api>=0.2.0

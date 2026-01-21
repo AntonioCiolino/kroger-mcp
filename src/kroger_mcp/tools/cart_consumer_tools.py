@@ -82,7 +82,44 @@ async def _make_kroger_api_request(
 def register_tools(mcp):
     """Register standard Kroger Cart tools with the FastMCP server"""
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the item was successfully added"
+            },
+            "message": {
+                "type": "string",
+                "description": "Summary message"
+            },
+            "upc": {
+                "type": "string",
+                "description": "Product UPC that was added"
+            },
+            "quantity": {
+                "type": "integer",
+                "description": "Quantity added"
+            },
+            "modality": {
+                "type": "string",
+                "description": "Fulfillment method (PICKUP or DELIVERY)"
+            },
+            "timestamp": {
+                "type": "string",
+                "description": "ISO timestamp of operation"
+            },
+            "error": {
+                "type": "string",
+                "description": "Error message (when success=false)"
+            },
+            "details": {
+                "type": "string",
+                "description": "Additional error details (when success=false)"
+            }
+        },
+        "required": ["success"]
+    })
     async def add_to_cart(
         upc: str,
         quantity: int = 1,
@@ -170,9 +207,59 @@ def register_tools(mcp):
                     "modality": modality,
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the bulk add operation was successful"
+            },
+            "message": {
+                "type": "string",
+                "description": "Summary message of the operation"
+            },
+            "items_added": {
+                "type": "integer",
+                "description": "Number of items successfully added to cart"
+            },
+            "items": {
+                "type": "array",
+                "description": "List of items added to cart with UPC, quantity, and modality",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "upc": {"type": "string", "description": "Product UPC code"},
+                        "quantity": {"type": "integer", "description": "Quantity added"},
+                        "modality": {"type": "string", "description": "PICKUP or DELIVERY"}
+                    }
+                }
+            },
+            "items_skipped": {
+                "type": "integer",
+                "description": "Number of items that were skipped (not found or missing UPC)"
+            },
+            "skipped_items": {
+                "type": "array",
+                "description": "List of item names/identifiers that were skipped",
+                "items": {"type": "string"}
+            },
+            "timestamp": {
+                "type": "string",
+                "description": "ISO timestamp of the operation"
+            },
+            "error": {
+                "type": "string",
+                "description": "Error message (when success=false)"
+            },
+            "items_attempted": {
+                "type": "integer",
+                "description": "Total number of items attempted (only present on error)"
+            }
+        },
+        "required": ["success"]
+    })
     async def bulk_add_to_cart(
-        items: Union[List[Dict[str, Any]], str], 
+        items: Union[List[Dict[str, Any]], Dict[str, Any], str], 
         ctx: Context = None
     ) -> Dict[str, Any]:
         """
@@ -187,13 +274,27 @@ def register_tools(mcp):
                    - quantity: Quantity to add (default: 1)
                    - modality: PICKUP or DELIVERY (default: PICKUP)
                    
-                   Can also accept a JSON string containing {"items": [...], "unavailable": [...]}
-                   which will be parsed automatically (common when called from LLM-generated plans).
+                   Can also accept:
+                   - A dict with {"items": [...]} (common LLM mistake - will be unwrapped)
+                   - A JSON string containing the items list or {"items": [...]}
 
         Returns:
             Dictionary with results for the bulk add operation
         """
         try:
+            # Handle case where items is passed as {"items": [...]} dict (common LLM mistake)
+            if isinstance(items, dict):
+                if ctx:
+                    await ctx.info("Received items as dict, extracting items list...")
+                if "items" in items:
+                    items = items["items"]
+                else:
+                    return {
+                        "success": False,
+                        "error": "Invalid items format. Expected list or dict with 'items' key",
+                        "received_keys": list(items.keys())
+                    }
+            
             # Handle case where items is passed as a JSON string (common from LLM plans)
             if isinstance(items, str):
                 if ctx:
@@ -232,16 +333,87 @@ def register_tools(mcp):
 
             # Format items
             formatted_items = []
+            skipped_items = []
+            
             for item in items:
-                formatted_items.append({
-                    "upc": item.get("upc") or item.get("product_id"),
-                    "quantity": item.get("quantity", 1),
-                    "modality": item.get("modality", "PICKUP")
-                })
+                # Handle case where item is a loop result with nested search data
+                # Structure: {"index": 0, "element": "...", "success": true, "result": {"data": {"data": [products]}}}
+                if "result" in item and isinstance(item.get("result"), dict):
+                    result_data = item["result"].get("data", {})
+                    if isinstance(result_data, dict) and "data" in result_data:
+                        # Extract first product from search results
+                        products = result_data["data"]
+                        if products and len(products) > 0:
+                            first_product = products[0]
+                            upc = first_product.get("upc")
+                            if upc:
+                                formatted_items.append({
+                                    "upc": upc,
+                                    "quantity": item.get("quantity", 1),
+                                    "modality": item.get("modality", "PICKUP")
+                                })
+                                if ctx:
+                                    await ctx.info(f"Extracted UPC {upc} from search result for '{item.get('element', 'unknown')}'")
+                            else:
+                                skipped_items.append(item.get("element", "unknown"))
+                                if ctx:
+                                    await ctx.warning(f"Product found but missing UPC for '{item.get('element', 'unknown')}'")
+                        else:
+                            skipped_items.append(item.get("element", "unknown"))
+                            if ctx:
+                                await ctx.warning(f"No products found in search result for '{item.get('element', 'unknown')}'")
+                    else:
+                        # Standard item format
+                        upc = item.get("upc") or item.get("product_id")
+                        if upc:
+                            formatted_items.append({
+                                "upc": upc,
+                                "quantity": item.get("quantity", 1),
+                                "modality": item.get("modality", "PICKUP")
+                            })
+                        else:
+                            skipped_items.append(str(item))
+                else:
+                    # Standard item format
+                    upc = item.get("upc") or item.get("product_id")
+                    if upc:
+                        formatted_items.append({
+                            "upc": upc,
+                            "quantity": item.get("quantity", 1),
+                            "modality": item.get("modality", "PICKUP")
+                        })
+                    else:
+                        skipped_items.append(str(item))
 
             request_body = {"items": formatted_items}
+            
+            # Check if we have any valid items to add
+            if not formatted_items:
+                if ctx:
+                    await ctx.error(f"No valid items to add. All {len(items)} items were skipped.")
+                return {
+                    "success": False,
+                    "error": f"No valid items to add to cart. All items missing UPCs or not found.",
+                    "items_attempted": len(items),
+                    "items_skipped": len(skipped_items),
+                    "skipped_items": skipped_items
+                }
+            
+            # Validate that all items have UPCs (should be caught above, but double-check)
+            invalid_items = [item for item in formatted_items if not item.get("upc")]
+            if invalid_items:
+                if ctx:
+                    await ctx.error(f"Found {len(invalid_items)} items without UPCs")
+                return {
+                    "success": False,
+                    "error": f"Cannot add items without UPCs. {len(invalid_items)} of {len(formatted_items)} items missing UPC.",
+                    "items_attempted": len(items),
+                    "invalid_items_count": len(invalid_items)
+                }
 
             if ctx:
+                if skipped_items:
+                    await ctx.warning(f"Skipped {len(skipped_items)} items: {', '.join(skipped_items)}")
                 await ctx.info(f"Request body: {json.dumps(request_body)}")
 
             response = await _make_kroger_api_request(
@@ -254,15 +426,22 @@ def register_tools(mcp):
             )
 
             if ctx:
-                await ctx.info(f"Successfully added {len(items)} items to cart")
+                await ctx.info(f"Successfully added {len(formatted_items)} items to cart")
 
-            return {
+            result = {
                 "success": True,
-                "message": f"Successfully added {len(items)} items to cart",
-                "items_added": len(items),
+                "message": f"Successfully added {len(formatted_items)} items to cart",
+                "items_added": len(formatted_items),
                 "items": formatted_items,
                 "timestamp": datetime.now().isoformat(),
             }
+            
+            if skipped_items:
+                result["items_skipped"] = len(skipped_items)
+                result["skipped_items"] = skipped_items
+                result["message"] += f" ({len(skipped_items)} items skipped)"
+            
+            return result
 
         except Exception as e:
             if ctx:

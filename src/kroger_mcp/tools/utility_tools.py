@@ -10,7 +10,18 @@ from fastmcp import Context
 def register_tools(mcp):
     """Register utility tools with the FastMCP server"""
     
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "datetime": {"type": "string", "description": "ISO format datetime string"},
+            "date": {"type": "string", "description": "ISO format date string"},
+            "time": {"type": "string", "description": "ISO format time string"},
+            "timestamp": {"type": "integer", "description": "Unix timestamp"},
+            "formatted": {"type": "string", "description": "Human-readable formatted datetime"}
+        },
+        "required": ["success", "datetime", "date", "time", "timestamp", "formatted"]
+    })
     async def get_current_datetime(ctx: Context = None) -> Dict[str, Any]:
         """
         Get the current system date and time.

@@ -114,6 +114,13 @@ uv sync
 pip install -e .
 ```
 
+> **Note:** This project uses `uv` for dependency management. The `.venv` directory is uv-managed, 
+> so use `uv pip install` instead of `pip install` when adding or upgrading packages:
+> ```bash
+> # Upgrade a package in the uv-managed venv
+> uv pip install --upgrade fastmcp
+> ```
+
 ### Configuration
 
 Create a `.env` file in your project root or pass in env values via the JSON config:

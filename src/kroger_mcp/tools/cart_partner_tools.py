@@ -91,7 +91,20 @@ def register_tools(mcp):
     
     if not PARTNER_API_ENABLED:
         # Register a single informational tool explaining why partner tools are disabled
-        @mcp.tool()
+        @mcp.tool(output_schema={
+            "type": "object",
+            "properties": {
+                "partner_api_enabled": {"type": "boolean", "description": "Whether Partner API is enabled"},
+                "message": {"type": "string", "description": "Information message"},
+                "enable_instructions": {"type": "string", "description": "How to enable Partner API"},
+                "recommended_tools": {
+                    "type": "array",
+                    "description": "List of recommended alternative tools",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["partner_api_enabled", "message"]
+        })
         async def partner_api_info(ctx: Context = None) -> Dict[str, Any]:
             """
             Information about Partner API tools.
@@ -125,7 +138,19 @@ def register_tools(mcp):
 
     # Partner API tools - only registered if KROGER_ENABLE_PARTNER_API=true
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "api_type": {"type": "string", "description": "API type used (partner)"},
+            "data": {"type": "object", "description": "Cart data from API"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"},
+            "details": {"type": "string", "description": "Additional error details"},
+            "recommendation": {"type": "string", "description": "Recommended alternative action"}
+        },
+        "required": ["success"]
+    })
     async def get_user_carts_partner(ctx: Context = None) -> Dict[str, Any]:
         """
         [PARTNER API] Get a list of all carts that belong to an authenticated customer.
@@ -180,7 +205,19 @@ def register_tools(mcp):
                     "error": f"Failed to get user carts: {error_message}",
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "api_type": {"type": "string", "description": "API type used (partner)"},
+            "data": {"type": "object", "description": "Created cart data"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"},
+            "details": {"type": "string", "description": "Additional error details"},
+            "recommendation": {"type": "string", "description": "Recommended alternative action"}
+        },
+        "required": ["success"]
+    })
     async def create_cart_partner(
         items: Optional[List[Dict[str, Any]]] = None, ctx: Context = None
     ) -> Dict[str, Any]:
@@ -257,7 +294,18 @@ def register_tools(mcp):
                     "error": f"Failed to create cart: {error_message}",
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "api_type": {"type": "string", "description": "API type used (partner)"},
+            "data": {"type": "object", "description": "Cart data from API"},
+            "cart_id": {"type": "string", "description": "The cart ID"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"}
+        },
+        "required": ["success"]
+    })
     async def get_cart_by_id_partner(cart_id: str, ctx: Context = None) -> Dict[str, Any]:
         """
         [PARTNER API] Get a specific cart by ID for an authenticated customer.
@@ -303,7 +351,23 @@ def register_tools(mcp):
                 "cart_id": cart_id,
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "api_type": {"type": "string", "description": "API type used (partner)"},
+            "data": {"type": "object", "description": "Updated cart data"},
+            "cart_id": {"type": "string", "description": "The cart ID"},
+            "upc": {"type": "string", "description": "The product UPC added"},
+            "quantity": {"type": "integer", "description": "Quantity added"},
+            "modality": {"type": "string", "description": "Fulfillment modality"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"},
+            "details": {"type": "string", "description": "Additional error details"},
+            "recommendation": {"type": "string", "description": "Recommended alternative action"}
+        },
+        "required": ["success"]
+    })
     async def add_item_to_cart_partner(
         cart_id: str,
         upc: str,
@@ -385,7 +449,20 @@ def register_tools(mcp):
                     "upc": upc,
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "api_type": {"type": "string", "description": "API type used (partner)"},
+            "message": {"type": "string", "description": "Confirmation message"},
+            "cart_id": {"type": "string", "description": "The cart ID"},
+            "upc": {"type": "string", "description": "The product UPC updated"},
+            "quantity": {"type": "integer", "description": "New quantity"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"}
+        },
+        "required": ["success"]
+    })
     async def update_cart_item_quantity_partner(
         cart_id: str, upc: str, quantity: int, ctx: Context = None
     ) -> Dict[str, Any]:
@@ -447,7 +524,19 @@ def register_tools(mcp):
                 "upc": upc,
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "api_type": {"type": "string", "description": "API type used (partner)"},
+            "message": {"type": "string", "description": "Confirmation message"},
+            "cart_id": {"type": "string", "description": "The cart ID"},
+            "upc": {"type": "string", "description": "The product UPC deleted"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"}
+        },
+        "required": ["success"]
+    })
     async def delete_cart_item_partner(
         cart_id: str, upc: str, ctx: Context = None
     ) -> Dict[str, Any]:

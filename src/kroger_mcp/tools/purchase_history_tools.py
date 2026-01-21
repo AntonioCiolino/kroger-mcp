@@ -13,7 +13,22 @@ from .shared import get_authenticated_client
 def register_tools(mcp):
     """Register purchase history tools with the FastMCP server"""
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the search was successful"},
+            "purchases": {
+                "type": "array",
+                "description": "Array of purchase records",
+                "items": {"type": "object"}
+            },
+            "count": {"type": "integer", "description": "Number of purchases found"},
+            "meta": {"type": "object", "description": "Metadata about the search results"},
+            "loyalty_id": {"type": "string", "description": "The loyalty ID used for the search"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def search_purchase_history(
         loyalty_id: str = None,
         start_date: str = None,
@@ -162,7 +177,26 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "receipts": {
+                "type": "array",
+                "description": "Array of detailed receipt objects",
+                "items": {"type": "object"}
+            },
+            "count": {"type": "integer", "description": "Number of receipts retrieved"},
+            "meta": {"type": "object", "description": "Metadata about the results"},
+            "errors": {
+                "type": "array",
+                "description": "Array of error objects if any receipts failed",
+                "items": {"type": "object"}
+            },
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_receipt_details(
         receipt_keys: List[str],
         ctx: Context = None,
@@ -242,7 +276,22 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the search was successful"},
+            "purchases": {
+                "type": "array",
+                "description": "Array of recent purchase records",
+                "items": {"type": "object"}
+            },
+            "count": {"type": "integer", "description": "Number of purchases found"},
+            "meta": {"type": "object", "description": "Metadata about the search results"},
+            "loyalty_id": {"type": "string", "description": "The loyalty ID used for the search"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_recent_purchases(
         loyalty_id: str = None,
         days: int = 30,

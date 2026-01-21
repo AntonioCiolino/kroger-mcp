@@ -17,7 +17,45 @@ from .shared import (
 def register_tools(mcp):
     """Register location-related tools with the FastMCP server"""
     
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the search was successful"
+            },
+            "search_params": {
+                "type": "object",
+                "description": "The search parameters used",
+                "properties": {
+                    "zip_code": {"type": "string"},
+                    "radius_miles": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                    "chain": {"type": ["string", "null"]}
+                }
+            },
+            "count": {
+                "type": "integer",
+                "description": "Number of locations found"
+            },
+            "data": {
+                "type": "array",
+                "description": "Array of location objects",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "location_id": {"type": "string", "description": "Unique location identifier"},
+                        "name": {"type": "string", "description": "Store name"},
+                        "chain": {"type": "string", "description": "Store chain (e.g., Kroger, Ralphs)"},
+                        "full_address": {"type": "string", "description": "Full formatted address"}
+                    }
+                }
+            },
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def search_locations(
         zip_code: Optional[str] = None,
         radius_in_miles: int = Field(default=10, ge=1, le=100, description="Search radius in miles (1-100)"),
@@ -117,7 +155,27 @@ def register_tools(mcp):
                 "data": []
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "location_id": {"type": "string", "description": "The location identifier"},
+            "name": {"type": "string", "description": "Store name"},
+            "chain": {"type": "string", "description": "Store chain"},
+            "phone": {"type": "string", "description": "Store phone number"},
+            "address": {"type": "object", "description": "Store address details"},
+            "coordinates": {"type": "object", "description": "Geographic coordinates"},
+            "departments": {
+                "type": "array",
+                "description": "Array of department objects",
+                "items": {"type": "object"}
+            },
+            "department_count": {"type": "integer", "description": "Number of departments"},
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_location_details(
         location_id: str,
         ctx: Context = None
@@ -196,7 +254,17 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "preferred_location_id": {"type": "string", "description": "The location ID that was set"},
+            "location_name": {"type": ["string", "null"], "description": "Name of the location"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "error": {"type": "string", "description": "Error details when success=false"}
+        },
+        "required": ["success"]
+    })
     async def set_preferred_location(
         location_id: str,
         ctx: Context = None
@@ -248,7 +316,26 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether a preferred location is set"},
+            "preferred_location_id": {"type": ["string", "null"], "description": "The preferred location ID"},
+            "location_details": {
+                "type": "object",
+                "description": "Details about the preferred location",
+                "properties": {
+                    "name": {"type": ["string", "null"]},
+                    "chain": {"type": ["string", "null"]},
+                    "phone": {"type": ["string", "null"]},
+                    "address": {"type": "object"}
+                }
+            },
+            "message": {"type": "string", "description": "Message when no location is set"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_preferred_location(ctx: Context = None) -> Dict[str, Any]:
         """
         Get the currently set preferred store location.
@@ -294,7 +381,17 @@ def register_tools(mcp):
                 "preferred_location_id": preferred_location_id
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "location_id": {"type": "string", "description": "The location identifier"},
+            "exists": {"type": "boolean", "description": "Whether the location exists"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def check_location_exists(
         location_id: str,
         ctx: Context = None

@@ -2,9 +2,11 @@
 Product search and management tools for Kroger MCP server
 """
 
-from typing import Dict, List, Any, Optional, Literal
+from typing import Dict, List, Any, Optional, Literal, Union
 from pydantic import Field
-from fastmcp import Context, Image
+from fastmcp import Context
+from fastmcp.utilities.types import Image
+from mcp.types import ImageContent
 import requests
 from io import BytesIO
 
@@ -18,13 +20,23 @@ from .shared import (
 def register_tools(mcp):
     """Register product-related tools with the FastMCP server"""
     
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "type": {"type": "string", "description": "Content type - 'image' when successful"},
+            "data": {"type": "string", "description": "Base64 encoded image data (when successful)"},
+            "mimeType": {"type": "string", "description": "Image MIME type (when successful)"},
+            "success": {"type": "boolean", "description": "False when error occurs"},
+            "error": {"type": "string", "description": "Error message (when success=false)"},
+            "message": {"type": "string", "description": "Additional error details (when success=false)"}
+        }
+    })
     async def get_product_images(
         product_id: str,
         perspective: str = "front",
         location_id: Optional[str] = None,
         ctx: Context = None
-    ) -> Image:
+    ) -> Union[ImageContent, Dict[str, Any]]:
         """
         Get an image for a specific product from the requested perspective.
         
@@ -111,11 +123,12 @@ def register_tools(mcp):
                         response = requests.get(img_url)
                         response.raise_for_status()
                         
-                        # Create Image object
-                        perspective_image = Image(
+                        # Create Image object and convert to ImageContent for proper serialization
+                        img_obj = Image(
                             data=response.content,
                             format="jpeg"  # Kroger images are typically JPEG
                         )
+                        perspective_image = img_obj.to_image_content()
                         break
                     except Exception as e:
                         if ctx:
@@ -139,7 +152,32 @@ def register_tools(mcp):
                 "error": str(e)
             }
     
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the search was successful"},
+            "search_params": {
+                "type": "object",
+                "description": "The search parameters used",
+                "properties": {
+                    "search_term": {"type": "string"},
+                    "location_id": {"type": "string"},
+                    "limit": {"type": "integer"},
+                    "fulfillment": {"type": ["string", "null"]},
+                    "brand": {"type": ["string", "null"]}
+                }
+            },
+            "count": {"type": "integer", "description": "Number of products found"},
+            "data": {
+                "type": "array",
+                "description": "Array of product objects",
+                "items": {"type": "object"}
+            },
+            "message": {"type": "string", "description": "Error or informational message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def search_products(
         search_term: str,
         location_id: Optional[str] = None,
@@ -277,9 +315,30 @@ def register_tools(mcp):
                 "data": []
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "product_id": {"type": "string", "description": "The product identifier"},
+            "upc": {"type": "string", "description": "Product UPC code"},
+            "description": {"type": "string", "description": "Product description"},
+            "brand": {"type": "string", "description": "Product brand"},
+            "categories": {"type": "array", "items": {"type": "string"}},
+            "country_origin": {"type": "string"},
+            "temperature": {"type": "object"},
+            "location_id": {"type": "string"},
+            "item_details": {"type": "object"},
+            "pricing": {"type": "object"},
+            "aisle_locations": {"type": "array", "items": {"type": "object"}},
+            "images": {"type": "array", "items": {"type": "object"}},
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_product_details(
-        product_id: str,
+        product_id: Optional[str] = None,
+        upc: Optional[str] = None,
         location_id: Optional[str] = None,
         ctx: Context = None
     ) -> Dict[str, Any]:
@@ -287,12 +346,23 @@ def register_tools(mcp):
         Get detailed information about a specific product.
         
         Args:
-            product_id: The unique product identifier
+            product_id: The unique product identifier (can also use upc parameter)
+            upc: Product UPC code (alias for product_id)
             location_id: Store location ID for pricing/availability (uses preferred if not provided)
         
         Returns:
             Dictionary containing detailed product information
         """
+        # Handle upc as alias for product_id
+        if not product_id and upc:
+            product_id = upc
+        
+        if not product_id:
+            return {
+                "success": False,
+                "error": "Either product_id or upc must be provided"
+            }
+        
         # Use preferred location if none provided
         if not location_id:
             location_id = get_preferred_location_id()
@@ -395,7 +465,62 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the search was successful"
+            },
+            "search_term": {
+                "type": "string",
+                "description": "The search term that was used"
+            },
+            "count": {
+                "type": "integer",
+                "description": "Number of products found"
+            },
+            "data": {
+                "type": "array",
+                "description": "Array of compact product objects",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "upc": {
+                            "type": "string",
+                            "description": "Product UPC code (required for add_to_cart)"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Product name/description"
+                        },
+                        "size": {
+                            "type": ["string", "null"],
+                            "description": "Product size (e.g., '1 lb', '64 oz') - may be null"
+                        },
+                        "price": {
+                            "type": ["number", "null"],
+                            "description": "Current price (sale price if on sale, otherwise regular) - may be null if unavailable"
+                        },
+                        "in_stock": {
+                            "type": "boolean",
+                            "description": "Whether product is in stock"
+                        }
+                    },
+                    "required": ["upc", "description"]
+                }
+            },
+            "message": {
+                "type": "string",
+                "description": "Error or informational message (when success=false)"
+            },
+            "error": {
+                "type": "string",
+                "description": "Error details (when success=false)"
+            }
+        },
+        "required": ["success"]
+    })
     async def search_products_compact(
         search_term: str,
         location_id: Optional[str] = None,
@@ -421,6 +546,13 @@ def register_tools(mcp):
         Returns:
             Dictionary with compact product data: {upc, description, size, price, in_stock}
         """
+        # Validate search_term is not empty
+        if not search_term or not search_term.strip():
+            return {
+                "success": False,
+                "error": "search_term cannot be empty. Provide a product name like 'milk', 'bread', or 'chicken breast'."
+            }
+        
         # Use preferred location if none provided
         if not location_id:
             location_id = get_preferred_location_id()
@@ -502,7 +634,28 @@ def register_tools(mcp):
                 "data": []
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the search was successful"},
+            "search_params": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "string"},
+                    "location_id": {"type": "string"}
+                }
+            },
+            "count": {"type": "integer", "description": "Number of products found"},
+            "data": {
+                "type": "array",
+                "description": "Array of product objects",
+                "items": {"type": "object"}
+            },
+            "message": {"type": "string", "description": "Error or informational message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def search_products_by_id(
         product_id: str,
         location_id: Optional[str] = None,

@@ -11,7 +11,17 @@ from .shared import get_authenticated_client, invalidate_authenticated_client
 def register_tools(mcp):
     """Register profile-related tools with the FastMCP server"""
     
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "loyalty_card_number": {"type": "string", "description": "The loyalty card number"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "raw_data": {"type": "object", "description": "Raw API response data"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_user_loyalty_info(ctx: Context = None) -> Dict[str, Any]:
         """
         Get the authenticated user's Kroger loyalty information.
@@ -74,7 +84,21 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "profile_id": {"type": "string", "description": "User profile ID"},
+            "first_name": {"type": "string", "description": "User's first name"},
+            "last_name": {"type": "string", "description": "User's last name"},
+            "full_name": {"type": "string", "description": "User's full name"},
+            "email": {"type": "string", "description": "User's email address"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "raw_data": {"type": "object", "description": "Raw profile data for debugging"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_user_profile(ctx: Context = None) -> Dict[str, Any]:
         """
         Get the authenticated user's Kroger profile information.
@@ -139,7 +163,18 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the test was successful"},
+            "token_valid": {"type": "boolean", "description": "Whether the authentication token is valid"},
+            "has_refresh_token": {"type": "boolean", "description": "Whether a refresh token is available"},
+            "can_auto_refresh": {"type": "boolean", "description": "Whether token can be automatically refreshed"},
+            "message": {"type": "string", "description": "Authentication status message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success", "token_valid"]
+    })
     async def test_authentication(ctx: Context = None) -> Dict[str, Any]:
         """
         Test if the current authentication token is valid.
@@ -185,7 +220,23 @@ def register_tools(mcp):
                 "token_valid": False
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "authenticated": {"type": "boolean", "description": "Whether user is authenticated"},
+            "token_type": {"type": "string", "description": "Type of authentication token"},
+            "has_refresh_token": {"type": "boolean", "description": "Whether a refresh token is available"},
+            "expires_in": {"type": "integer", "description": "Token expiration time in seconds"},
+            "scope": {"type": "string", "description": "OAuth scopes granted"},
+            "access_token_preview": {"type": "string", "description": "Preview of access token"},
+            "refresh_token_preview": {"type": "string", "description": "Preview of refresh token"},
+            "token_file": {"type": "string", "description": "Path to token file"},
+            "message": {"type": "string", "description": "Status message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success", "authenticated"]
+    })
     async def get_authentication_info(ctx: Context = None) -> Dict[str, Any]:
         """
         Get information about the current authentication state and token.
@@ -237,7 +288,16 @@ def register_tools(mcp):
                 "authenticated": False
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation message"},
+            "note": {"type": "string", "description": "Additional information about re-authentication"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def force_reauthenticate(ctx: Context = None) -> Dict[str, Any]:
         """
         Force re-authentication by clearing the current authentication token.

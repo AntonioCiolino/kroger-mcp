@@ -27,7 +27,16 @@ _auth_state = None
 def register_auth_tools(mcp):
     """Register authentication-specific tools with the FastMCP server"""
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "auth_url": {"type": "string", "description": "The authorization URL to open in browser"},
+            "instructions": {"type": "string", "description": "Step-by-step instructions for authentication"},
+            "error": {"type": "boolean", "description": "Whether an error occurred"},
+            "message": {"type": "string", "description": "Error message when error=true"}
+        },
+        "required": []
+    })
     async def start_authentication(ctx: Context = None) -> Dict[str, Any]:
         """
         Start the OAuth authentication flow with Kroger.
@@ -109,7 +118,25 @@ def register_auth_tools(mcp):
             ).format(auth_url=auth_url),
         }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether authentication was successful"},
+            "message": {"type": "string", "description": "Success or error message"},
+            "token_info": {
+                "type": "object",
+                "description": "Token information when successful",
+                "properties": {
+                    "expires_in": {"type": "integer", "description": "Token expiration time in seconds"},
+                    "token_type": {"type": "string", "description": "Type of token"},
+                    "scope": {"type": "string", "description": "OAuth scopes granted"},
+                    "has_refresh_token": {"type": "boolean", "description": "Whether refresh token is available"}
+                }
+            },
+            "error": {"type": "boolean", "description": "Whether an error occurred"}
+        },
+        "required": []
+    })
     async def complete_authentication(
         redirect_url: str, ctx: Context = None
     ) -> Dict[str, Any]:

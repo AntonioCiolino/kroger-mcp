@@ -237,7 +237,213 @@ async def clear_cart() -> Dict[str, Any]:
 def register_tools(mcp):
     """Register cart-related tools with the FastMCP server"""
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the item was successfully added"
+            },
+            "message": {
+                "type": "string",
+                "description": "Confirmation or error message"
+            },
+            "product_id": {
+                "type": "string",
+                "description": "The product ID/UPC that was added"
+            },
+            "quantity": {
+                "type": "integer",
+                "description": "Quantity added"
+            },
+            "modality": {
+                "type": "string",
+                "description": "Fulfillment method (PICKUP or DELIVERY)"
+            },
+            "cart_id": {
+                "type": ["string", "null"],
+                "description": "The Kroger cart ID"
+            },
+            "timestamp": {
+                "type": "string",
+                "description": "ISO timestamp of when item was added"
+            },
+            "error": {
+                "type": "string",
+                "description": "Error message (when success=false)"
+            },
+            "details": {
+                "type": "string",
+                "description": "Additional error details"
+            }
+        },
+        "required": ["success"]
+    })
+    async def add_to_cart(
+        upc: str,
+        quantity: int = 1,
+        modality: str = "PICKUP",
+        ctx: Context = None,
+    ) -> Dict[str, Any]:
+        """
+        Add a single item to the user's Kroger cart using the Partner API.
+
+        This is the primary tool for adding items to cart. Use the UPC from search_products_compact.
+
+        If the user doesn't specifically indicate a preference for pickup or delivery,
+        you should ask them which modality they prefer before calling this tool.
+
+        Args:
+            upc: The product UPC code to add to cart (from search_products_compact results)
+            quantity: Quantity to add (default: 1)
+            modality: Fulfillment method - PICKUP or DELIVERY
+
+        Returns:
+            Dictionary confirming the item was added to cart
+        """
+        try:
+            if ctx:
+                await ctx.info(
+                    f"Adding {quantity}x {upc} to cart with {modality} modality"
+                )
+
+            client = get_authenticated_client()
+
+            # First, get or create a cart
+            carts_response = await _make_kroger_api_request(
+                method="GET",
+                endpoint="/v1/carts",
+            )
+
+            cart_id = None
+            if carts_response and "data" in carts_response and carts_response["data"]:
+                # Use existing cart
+                cart_id = carts_response["data"][0]["id"]
+                if ctx:
+                    await ctx.info(f"Using existing cart: {cart_id}")
+            else:
+                # Create new cart
+                if ctx:
+                    await ctx.info("No cart found, creating new cart")
+                
+                create_response = await _make_kroger_api_request(
+                    method="POST",
+                    endpoint="/v1/carts",
+                    headers={
+                        "Content-Type": "application/json",
+                    },
+                    data=json.dumps({}),
+                )
+                
+                if create_response and "data" in create_response:
+                    cart_id = create_response["data"]["id"]
+                    if ctx:
+                        await ctx.info(f"Created new cart: {cart_id}")
+                else:
+                    raise Exception("Failed to create cart")
+
+            # Add item to cart using Partner API
+            item_data = {
+                "upc": upc,
+                "quantity": quantity,
+                "modality": modality,
+                "allowSubstitutes": True,
+            }
+
+            if ctx:
+                await ctx.info(f"Adding item to cart {cart_id}: {item_data}")
+
+            response = await _make_kroger_api_request(
+                method="POST",
+                endpoint=f"/v1/carts/{cart_id}/items",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps(item_data),
+            )
+
+            if ctx:
+                await ctx.info("Successfully added item to Kroger cart via Partner API")
+
+            return {
+                "success": True,
+                "message": f"Successfully added {quantity}x {upc} to cart",
+                "product_id": upc,
+                "quantity": quantity,
+                "modality": modality,
+                "cart_id": cart_id,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        except Exception as e:
+            if ctx:
+                await ctx.error(f"Failed to add item to cart: {str(e)}")
+
+            # Provide helpful error message for authentication issues
+            error_message = str(e)
+            if "401" in error_message or "Unauthorized" in error_message:
+                return {
+                    "success": False,
+                    "error": "Authentication failed. Please run force_reauthenticate and try again.",
+                    "details": error_message,
+                }
+            elif "400" in error_message or "Bad Request" in error_message:
+                return {
+                    "success": False,
+                    "error": f"Invalid request. Please check the UPC and try again.",
+                    "details": error_message,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to add item to cart: {error_message}",
+                    "product_id": upc,
+                    "quantity": quantity,
+                    "modality": modality,
+                }
+
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the item was successfully added"
+            },
+            "message": {
+                "type": "string",
+                "description": "Confirmation or error message"
+            },
+            "product_id": {
+                "type": "string",
+                "description": "The product ID/UPC that was added"
+            },
+            "quantity": {
+                "type": "integer",
+                "description": "Quantity added"
+            },
+            "modality": {
+                "type": "string",
+                "description": "Fulfillment method (PICKUP or DELIVERY)"
+            },
+            "cart_id": {
+                "type": "string",
+                "description": "The Kroger cart ID"
+            },
+            "timestamp": {
+                "type": "string",
+                "description": "ISO timestamp of when item was added"
+            },
+            "error": {
+                "type": "string",
+                "description": "Error message (when success=false)"
+            },
+            "details": {
+                "type": "string",
+                "description": "Additional error details"
+            }
+        },
+        "required": ["success"]
+    })
     async def add_items_to_cart(
         product_id: str,
         quantity: int = 1,
@@ -360,12 +566,76 @@ def register_tools(mcp):
                     "modality": modality,
                 }
 
-    @mcp.tool()
-    async def bulk_add_to_cart(
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {
+                "type": "boolean",
+                "description": "Whether the bulk add operation was successful (true if all items added)"
+            },
+            "message": {
+                "type": "string",
+                "description": "Summary message of the operation"
+            },
+            "items_added": {
+                "type": "integer",
+                "description": "Number of items successfully added to cart"
+            },
+            "items_failed": {
+                "type": "integer",
+                "description": "Number of items that failed to add"
+            },
+            "successful_items": {
+                "type": "array",
+                "description": "List of successfully added items",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": {"type": "string"},
+                        "quantity": {"type": "integer"},
+                        "modality": {"type": "string"}
+                    }
+                }
+            },
+            "failed_items": {
+                "type": "array",
+                "description": "List of items that failed to add",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": {"type": "string"},
+                        "error": {"type": "string"}
+                    }
+                }
+            },
+            "cart_id": {
+                "type": "string",
+                "description": "The Kroger cart ID"
+            },
+            "timestamp": {
+                "type": "string",
+                "description": "ISO timestamp of the operation"
+            },
+            "error": {
+                "type": "string",
+                "description": "Error message (when success=false)"
+            },
+            "items_attempted": {
+                "type": "integer",
+                "description": "Total number of items attempted (when operation fails)"
+            }
+        },
+        "required": ["success"]
+    })
+    async def bulk_add_to_cart_partner(
         items: List[Dict[str, Any]], ctx: Context = None
     ) -> Dict[str, Any]:
         """
         Add multiple items to the user's Kroger cart using the Partner API.
+        
+        NOTE: This uses the Partner API (POST /v1/carts/{cart_id}/items) which requires
+        special partner-level access. For standard usage, use bulk_add_to_cart instead
+        which uses the Consumer API (PUT /v1/cart/add).
 
         If the user doesn't specifically indicate a preference for pickup or delivery,
         you should ask them which modality they prefer before calling this tool.
@@ -491,7 +761,33 @@ def register_tools(mcp):
                     "items_attempted": len(items),
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "current_cart": {
+                "type": "array",
+                "description": "Array of cart items",
+                "items": {"type": "object"}
+            },
+            "cart_id": {"type": "string", "description": "The Kroger cart ID"},
+            "summary": {
+                "type": "object",
+                "properties": {
+                    "total_items": {"type": "integer"},
+                    "total_quantity": {"type": "integer"},
+                    "pickup_items": {"type": "integer"},
+                    "delivery_items": {"type": "integer"},
+                    "cart_exists": {"type": "boolean"}
+                }
+            },
+            "raw_response": {"type": "object", "description": "Raw API response"},
+            "message": {"type": "string", "description": "Message when no cart found or error"},
+            "error": {"type": "string", "description": "Error details"},
+            "details": {"type": "string", "description": "Additional error details"}
+        },
+        "required": ["success"]
+    })
     async def view_current_cart(ctx: Context = None) -> Dict[str, Any]:
         """
         View the current cart contents from the Kroger API.
@@ -572,7 +868,18 @@ def register_tools(mcp):
             else:
                 return {"success": False, "error": f"Failed to view cart: {error_message}"}
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "items_removed": {"type": "integer", "description": "Number of items removed"},
+            "product_id": {"type": "string", "description": "The product ID that was removed"},
+            "modality": {"type": ["string", "null"], "description": "The modality that was removed"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def remove_from_local_cart_tracking(
         product_id: str, modality: str = None, ctx: Context = None
     ) -> Dict[str, Any]:
@@ -640,7 +947,21 @@ def register_tools(mcp):
                 await ctx.error(f"Failed to remove from local cart tracking: {str(e)}")
             return {"success": False, "error": f"Failed to remove from cart: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "kroger_items_removed": {"type": "integer", "description": "Number of items removed from Kroger cart"},
+            "product_id": {"type": "string", "description": "The product ID that was removed"},
+            "modality": {"type": ["string", "null"], "description": "The modality that was removed"},
+            "cart_id": {"type": "string", "description": "The Kroger cart ID"},
+            "summary": {"type": "object", "description": "Summary of removal operation"},
+            "error": {"type": "string", "description": "Error message"},
+            "details": {"type": "string", "description": "Additional error details"}
+        },
+        "required": ["success"]
+    })
     async def remove_from_cart(
         product_id: str, modality: str = None, ctx: Context = None
     ) -> Dict[str, Any]:
@@ -768,7 +1089,16 @@ def register_tools(mcp):
                     "product_id": product_id,
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "items_cleared": {"type": "integer", "description": "Number of items cleared from local tracking"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def clear_local_cart_tracking(ctx: Context = None) -> Dict[str, Any]:
         """
         Clear all items from the local cart tracking only.
@@ -806,7 +1136,21 @@ def register_tools(mcp):
                 await ctx.error(f"Failed to clear local cart tracking: {str(e)}")
             return {"success": False, "error": f"Failed to clear cart: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "kroger_items_cleared": {"type": "integer", "description": "Number of items cleared from Kroger cart"},
+            "kroger_items_total": {"type": "integer", "description": "Total number of items in cart before clearing"},
+            "cart_id": {"type": "string", "description": "The Kroger cart ID"},
+            "summary": {"type": "object", "description": "Summary of clearing operation"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "error": {"type": "string", "description": "Error message"},
+            "details": {"type": "string", "description": "Additional error details"}
+        },
+        "required": ["success"]
+    })
     async def clear_cart(ctx: Context = None) -> Dict[str, Any]:
         """
         Clear all items from the actual Kroger cart using the Partner API.
@@ -935,7 +1279,19 @@ def register_tools(mcp):
                     "error": f"Failed to clear cart: {error_message}",
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "order_id": {"type": "integer", "description": "Simple order ID based on history length"},
+            "items_placed": {"type": "integer", "description": "Number of items in the order"},
+            "total_quantity": {"type": "integer", "description": "Total quantity of items"},
+            "placed_at": {"type": "string", "description": "ISO timestamp when order was placed"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def mark_order_placed(
         order_notes: str = None, ctx: Context = None
     ) -> Dict[str, Any]:
@@ -994,7 +1350,19 @@ def register_tools(mcp):
                 "error": f"Failed to mark order as placed: {str(e)}",
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "cart_data": {"type": "object", "description": "The actual Kroger cart data"},
+            "timestamp": {"type": "string", "description": "ISO timestamp of operation"},
+            "version": {"type": "string", "description": "API version used"},
+            "error": {"type": "string", "description": "Error message"},
+            "details": {"type": "string", "description": "Additional error details"}
+        },
+        "required": ["success"]
+    })
     async def fetch_actual_kroger_cart(ctx: Context = None) -> Dict[str, Any]:
         """
         Fetch the actual cart from the Kroger API using the Partner API.
@@ -1045,7 +1413,18 @@ def register_tools(mcp):
                     "error": f"Error fetching Kroger cart: {error_message}"
                 }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the test was successful"},
+            "message": {"type": "string", "description": "Test result message"},
+            "cart_response": {"type": "object", "description": "Cart API response"},
+            "has_carts": {"type": "boolean", "description": "Whether carts were found"},
+            "error": {"type": "string", "description": "Error message"},
+            "suggestion": {"type": "string", "description": "Suggestion for fixing the issue"}
+        },
+        "required": ["success"]
+    })
     async def test_cart_api_access(ctx: Context = None) -> Dict[str, Any]:
         """
         Test if we can access the Kroger cart API.
@@ -1105,7 +1484,28 @@ def register_tools(mcp):
                 await ctx.error(f"❌ Test failed: {str(e)}")
             return {"success": False, "error": f"Test failed: {str(e)}"}
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "orders": {
+                "type": "array",
+                "description": "Array of order records",
+                "items": {"type": "object"}
+            },
+            "showing": {"type": "integer", "description": "Number of orders shown"},
+            "summary": {
+                "type": "object",
+                "properties": {
+                    "total_orders": {"type": "integer"},
+                    "total_items_all_time": {"type": "integer"},
+                    "total_quantity_all_time": {"type": "integer"}
+                }
+            },
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def view_order_history(
         limit: int = 10, ctx: Context = None
     ) -> Dict[str, Any]:

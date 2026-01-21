@@ -11,7 +11,27 @@ from .shared import get_client_credentials_client
 def register_tools(mcp):
     """Register information-related tools with the FastMCP server"""
     
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "count": {"type": "integer", "description": "Number of chains found"},
+            "data": {
+                "type": "array",
+                "description": "Array of chain objects",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "division_numbers": {"type": "array", "items": {"type": "string"}}
+                    }
+                }
+            },
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def list_chains(ctx: Context = None) -> Dict[str, Any]:
         """
         Get a list of all Kroger-owned chains.
@@ -61,7 +81,21 @@ def register_tools(mcp):
                 "data": []
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "name": {"type": "string", "description": "Chain name"},
+            "division_numbers": {
+                "type": "array",
+                "description": "Division numbers for the chain",
+                "items": {"type": "string"}
+            },
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_chain_details(
         chain_name: str,
         ctx: Context = None
@@ -105,7 +139,17 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "chain_name": {"type": "string", "description": "The chain name that was checked"},
+            "exists": {"type": "boolean", "description": "Whether the chain exists"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def check_chain_exists(
         chain_name: str,
         ctx: Context = None
@@ -142,7 +186,27 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "count": {"type": "integer", "description": "Number of departments found"},
+            "data": {
+                "type": "array",
+                "description": "Array of department objects",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "department_id": {"type": "string"},
+                        "name": {"type": "string"}
+                    }
+                }
+            },
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def list_departments(ctx: Context = None) -> Dict[str, Any]:
         """
         Get a list of all available departments in Kroger stores.
@@ -192,7 +256,17 @@ def register_tools(mcp):
                 "data": []
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "department_id": {"type": "string", "description": "The department identifier"},
+            "name": {"type": "string", "description": "Department name"},
+            "message": {"type": "string", "description": "Error message when success=false"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def get_department_details(
         department_id: str,
         ctx: Context = None
@@ -236,7 +310,17 @@ def register_tools(mcp):
                 "error": str(e)
             }
 
-    @mcp.tool()
+    @mcp.tool(output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether the operation was successful"},
+            "department_id": {"type": "string", "description": "The department ID that was checked"},
+            "exists": {"type": "boolean", "description": "Whether the department exists"},
+            "message": {"type": "string", "description": "Confirmation or error message"},
+            "error": {"type": "string", "description": "Error details"}
+        },
+        "required": ["success"]
+    })
     async def check_department_exists(
         department_id: str,
         ctx: Context = None
