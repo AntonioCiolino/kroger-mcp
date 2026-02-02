@@ -157,8 +157,7 @@ def register_tools(mcp):
                 ]
             }
 
-            if ctx:
-                await ctx.info(f"Request body: {json.dumps(request_body)}")
+            # Debug logging removed - was too verbose for INFO level
 
             response = await _make_kroger_api_request(
                 method="PUT",
@@ -330,7 +329,6 @@ def register_tools(mcp):
             
             if ctx:
                 await ctx.info(f"Adding {len(items)} items to cart")
-                await ctx.info(f"DEBUG - First item structure: {json.dumps(items[0] if items else {}, indent=2)[:500]}")
 
             # Format items
             formatted_items = []
@@ -339,8 +337,6 @@ def register_tools(mcp):
             for item in items:
                 # Handle case where item is a loop result with nested search data
                 # Structure: {"index": 0, "element": "...", "success": true, "result": {"data": {"data": [products]}}}
-                if ctx:
-                    await ctx.info(f"DEBUG - Processing item with result key: {list(item.keys())}")
                 if "result" in item and isinstance(item.get("result"), dict):
                     result_data = item["result"].get("data", {})
                     if isinstance(result_data, dict) and "data" in result_data:
@@ -417,7 +413,6 @@ def register_tools(mcp):
             if ctx:
                 if skipped_items:
                     await ctx.warning(f"Skipped {len(skipped_items)} items: {', '.join(skipped_items)}")
-                await ctx.info(f"Request body: {json.dumps(request_body)}")
 
             response = await _make_kroger_api_request(
                 method="PUT",
